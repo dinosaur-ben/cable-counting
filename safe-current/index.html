@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IEC/JCS 終極電纜安全電流精密計算與臺灣法規對照工具</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --border-color: #cbd5e1;
+            --input-green: #e2f0d9;
+            --select-red: #fce4d6;
+            --auto-blue: #ddebf7;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; line-height: 1.5; }
+        .container { max-width: 1250px; margin: 0 auto; background: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
+        h2 { color: #0f172a; border-bottom: 3px solid #3b82f6; padding-bottom: 8px; margin-top: 0; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; }
+        h3 { color: #1e293b; background: #f1f5f9; padding: 10px 15px; border-left: 5px solid #64748b; margin-top: 25px; margin-bottom: 15px; border-radius: 0 6px 6px 0; font-size: 16px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 25px; }
+        .section { border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; background: #ffffff; }
+        .form-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; position: relative; }
+        label { font-weight: 600; font-size: 14px; flex: 1; padding-right: 10px; }
+        .input-wrap { display: flex; align-items: center; gap: 5px; }
+        input, select { width: 165px; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; text-align: right; box-sizing: border-box; font-size: 14px; }
+        .manual-input { background-color: var(--input-green) !important; color: #000; }
+        .dropdown-select { background-color: var(--select-red) !important; color: #000; text-align-last: right; }
+        .auto-calc { background-color: var(--auto-blue) !important; color: #1e3a8a; font-weight: bold; border-color: #93c5fd; }
+        .warn-badge { color: #dc2626; font-weight: bold; margin-left: 5px; cursor: help; animation: shake 0.5s infinite alternate; display: none; font-size: 16px; }
+        @keyframes shake { 0% { transform: translateX(0); } 100% { transform: translateX(3px); } }
+        .layer-container { overflow-x: auto; }
+        .layer-row { display: grid; grid-template-columns: 190px 180px 105px 105px 105px; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e2e8f0; min-width: 635px; }
+        .layer-header { font-weight: bold; background: #cbd5e1; padding: 10px; border-radius: 6px; font-size: 13px; }
+        .layer-row input, .layer-row select { width: 100% !important; padding: 6px; font-size: 13px; }
+        .tabs { display: flex; gap: 5px; margin-top: 40px; border-bottom: 2px solid #e2e8f0; flex-wrap: wrap; }
+        .tab-btn { padding: 10px 15px; background: #e2e8f0; border: none; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: bold; color: #475569; font-size: 13px; }
+        .tab-btn.active { background: #3b82f6; color: white; }
+        .tab-content { display: none; border: 1px solid #e2e8f0; border-top: none; padding: 20px; background: #fff; border-radius: 0 0 8px 8px; max-height: 400px; overflow-y: auto; }
+        .tab-content.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; }
+        th { background-color: #475569; color: white; position: sticky; top: 0; }
+        .force-btn { width: 100%; padding: 14px; background-color: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2); }
+        .inline-btn { padding: 5px 10px; background-color: #0284c7; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; margin-left: 5px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>⚡ 終極電纜結構安全電流計算器 (IEC 60287 / JCS 168D)</h2>
+    <div class="grid">
+        <!-- 第一部分：導體基礎參數與資料 -->
+        <div class="section">
+            <h3>1. 導體基礎參數與資料</h3>
+            <div class="form-group">
+                <label>導體核心材質</label>
+                <select id="cond_mat_select" class="dropdown-select" onchange="updateMaterialAlpha()">
+                    <option value="cu" selected>裸銅 / 鍍錫銅導體</option>
+                    <option value="al">鋁導體 (Aluminum)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>阻抗溫度係數 α20</label>
+                <input type="text" id="alpha_20_display" class="auto-calc" readonly value="0.00393">
+            </div>
+            <div class="form-group">
+                <label>電纜規格截面積</label>
+                <div class="input-wrap">
+                    <input type="number" id="spec_area" class="manual-input" value="3.5" step="0.1">
+                    <select id="area_unit" class="dropdown-select" style="width:75px;">
+                        <option value="mm2" selected>mm²</option>
+                        <option value="awg">AWG</option>
+                    </select>
+                    <span id="warn_area" class="warn-badge" title="截面積規格與實質外徑嚴重不匹配！">⚠️</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>標稱芯數 (C)</label>
+                <select id="cable_c" class="dropdown-select" onchange="syncCores()">
+                    <option value="1">1 C</option>
+                    <option value="2">2 C</option>
+                    <option value="3" selected>3 C</option>
+                    <option value="4">4 C</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>同時發熱芯數 (n)</label>
+                <input type="number" id="core_n" class="manual-input" value="3">
+            </div>
+            <div class="form-group">
+                <label>導體絞合完成外徑 (Dc)</label>
+                <div class="input-wrap">
+                    <input type="number" id="dc_input" class="manual-input" value="2.4" step="0.01"><span style="font-size:12px;color:#64748b">mm</span><span id="warn_dc" class="warn-badge" title="外徑異常。">⚠️</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>基準直流電阻 (R0)</label>
+                <div class="input-wrap">
+                    <input type="number" id="r0_input" class="manual-input" value="5.27" step="0.001">
+                    <select id="r0_unit" class="dropdown-select" style="width:90px;">
+                        <option value="ohm_km" selected>Ω/km</option>
+                        <option value="ohm_m">Ω/m</option>
+                    </select>
+                    <span id="warn_r0" class="warn-badge" title="電阻規格不匹配。">⚠️</span>
+                </div>
+            </div>
+            <!-- 【優化1：新增自訂 R0 基準測試溫度欄位】 -->
+            <div class="form-group">
+                <label>R0 測試基準溫度</label>
+                <div class="input-wrap">
+                    <input type="number" id="r0_temp" class="manual-input" value="20" step="1"><span style="font-size:12px;color:#64748b">°C</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>導體結構類型</label>
+                <select id="cond_type" class="dropdown-select"><option value="stranded" selected>圓形絞線 (Stranded)</option><option value="compacted">緊壓圓形 (Compacted)</option></select>
+            </div>
+            <div class="form-group">
+                <label>最高容許工作溫度 (θmax)</label>
+                <div class="input-wrap">
+                    <input type="number" id="theta_max" class="manual-input" value="90"><span style="font-size:12px;color:#64748b">°C</span><span id="warn_temp" class="warn-badge" title="超過材料上限！">⚠️</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>環境或土壤溫度 (θamb)</label>
+                <div class="input-wrap">
+                    <input type="number" id="theta_amb" class="manual-input" value="35"><span style="font-size:12px;color:#64748b">°C</span></div>
+            </div>
+            <!-- 【優化2,3,4：加裝獨立下拉選單，解決畫面三大欄位無數值問題】 -->
+            <div class="form-group">
+                <label>標準化 20°C 電阻</label>
+                <div class="input-wrap">
+                    <input type="text" id="r20_m" class="auto-calc" readonly value="-">
+                    <select id="r20_unit_select" class="dropdown-select" style="width:90px;" onchange="validateInputs()">
+                        <option value="ohm_m">Ω/m</option>
+                        <option value="ohm_km" selected>Ω/km</option>
+                        <option value="mohm_m">mΩ/m</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>工作溫度直流電阻 Rdc</label>
+                <div class="input-wrap">
+                    <input type="text" id="rdc_m" class="auto-calc" readonly value="-">
+                    <select id="rdc_unit_select" class="dropdown-select" style="width:90px;" onchange="validateInputs()">
+                        <option value="ohm_m">Ω/m</option>
+                        <option value="ohm_km" selected>Ω/km</option>
+                        <option value="mohm_m">mΩ/m</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>工作溫度交流電阻 Rac</label>
+                <div class="input-wrap">
+                    <input type="text" id="rac_m" class="auto-calc" readonly value="-">
+                    <select id="rac_unit_select" class="dropdown-select" style="width:90px;" onchange="validateInputs()">
+                        <option value="ohm_m">Ω/m</option>
+                        <option value="ohm_km" selected>Ω/km</option>
+                        <option value="mohm_m">mΩ/m</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <!-- 第二部分：11層結構區 (全材料解鎖版) -->
+        <div class="section" style="grid-column: span 2;">
+            <h3>2. 電纜幾何外徑與熱阻計算 (11層結構垂直對照)</h3>
+            <div class="layer-container">
+                <div class="layer-row layer-header">
+                    <div>結構名稱 (Layers)</div><div>材料選擇</div><div>手動厚度 (t) mm</div><div>計算外徑 (D) mm</div><div>計算熱阻 (T) K·m/W</div>
+                </div>
+                <div class="layer-row">
+                    <div>1. 導體 (Conductor)</div><input type="text" id="L1_mat_sync" class="auto-calc" style="text-align:center;" value="銅導體基準" readonly><input type="text" class="auto-calc" value="Dc 基準" readonly><input type="text" id="L1_outD" class="auto-calc" readonly value="-"><input type="text" id="L1_T" class="auto-calc" readonly value="0.0000">
+                </div>
+                <div class="layer-row">
+                    <div>2. 雲母帶 (Mica Tape)</div><select id="L2_mat" class="dropdown-select layer-mat-select"><option value="none">無</option><option value="mica" selected>雲母帶(耐火)</option><option value="custom">--自訂材料--</option></select><input type="number" id="L2_t" class="manual-input" value="0.1" step="0.05"><input type="text" id="L2_outD" class="auto-calc" readonly value="-"><input type="text" id="L2_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div style="font-weight:600;color:#2563eb;">3. 絕緣層 (Insulation)</div><select id="L3_mat" class="dropdown-select layer-mat-select"><option value="none">無</option><option value="xlpe" selected>XLPE (交聯聚乙烯)</option><option value="pvc">PVC (聚氯乙烯)</option><option value="pe">PE (聚乙烯絕緣)</option><option value="epr">EPR (乙丙橡膠)</option><option value="custom">--自訂材料--</option></select><input type="number" id="L3_t" class="manual-input" value="0.8" step="0.1"><input type="text" id="L3_outD" class="auto-calc" readonly value="-"><input type="text" id="L3_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>4. 隔離層 (Shielding)</div><select id="L4_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="screen">銅網 / 鋁箔隔離</option><option value="custom">--自訂材料--</option></select><input type="number" id="L4_t" class="manual-input" value="0" step="0.05"><input type="text" id="L4_outD" class="auto-calc" readonly value="-"><input type="text" id="L4_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>5. 對形內被 (Inner Sheath)</div><select id="L5_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="pvc">PVC 材料</option><option value="pe">PE 材料</option><option value="lszh">LSZH (低煙無鹵)</option><option value="custom">--自訂材料--</option></select><input type="number" id="L5_t" class="manual-input" value="0" step="0.1"><input type="text" id="L5_outD" class="auto-calc" readonly value="-"><input type="text" id="L5_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>6. 多C集合 (Assembly)</div><select id="L6_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="pvc">PVC 材料</option><option value="pe">PE 材料</option><option value="lszh">LSZH (低煙無鹵)</option><option value="custom">--自訂材料--</option></select><input type="number" id="L6_t" class="manual-input" value="0" step="0.1"><input type="text" id="L6_outD" class="auto-calc" readonly value="-"><input type="text" id="L6_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>7. 整體隔離 (Coll. Screen)</div><select id="L7_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="screen">銅網 / 鋁箔隔離</option><option value="custom">--自訂材料--</option></select><input type="number" id="L7_t" class="manual-input" value="0" step="0.05"><input type="text" id="L7_outD" class="auto-calc" readonly value="-"><input type="text" id="L7_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>8. 銅網 (Copper Braid)</div><select id="L8_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="screen">銅網 / 鋁箔隔離</option><option value="custom">--自訂材料--</option></select><input type="number" id="L8_t" class="manual-input" value="0" step="0.05"><input type="text" id="L8_outD" class="auto-calc" readonly value="-"><input type="text" id="L8_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>9. 內被 (Bedding)</div><select id="L9_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="pvc">PVC 材料</option><option value="pe">PE 材料</option><option value="lszh">LSZH (低煙無鹵)</option><option value="custom">--自訂材料--</option></select><input type="number" id="L9_t" class="manual-input" value="0" step="0.1"><input type="text" id="L9_outD" class="auto-calc" readonly value="-"><input type="text" id="L9_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div>10. 鎧裝 (Armour)</div><select id="L10_mat" class="dropdown-select layer-mat-select"><option value="none" selected>無</option><option value="armour">鋼帶 / 鐵線鎧裝</option><option value="custom">--自訂材料--</option></select><input type="number" id="L10_t" class="manual-input" value="0" step="0.1"><input type="text" id="L10_outD" class="auto-calc" readonly value="-"><input type="text" id="L10_T" class="auto-calc" readonly value="-">
+                </div>
+                <div class="layer-row">
+                    <div style="font-weight:600;color:#e11d48;">11. 外被 (Outer Sheath)</div><select id="L11_mat" class="dropdown-select layer-mat-select"><option value="none">無</option><option value="pvc" selected>PVC 被覆</option><option value="pe">PE 被覆</option><option value="lszh">LSZH (低煙無鹵)</option><option value="custom">--自訂材料--</option></select><input type="number" id="L11_t" class="manual-input" value="1.2" step="0.1"><input type="text" id="L11_outD" class="auto-calc" readonly value="-"><input type="text" id="L11_T" class="auto-calc" readonly value="-">
+                </div>
+                <div style="margin-top:15px; display:flex; gap:20px; font-weight:bold; color:#1e3a8a; font-size:14px; background:#eff6ff; padding:10px; border-radius:6px; flex-wrap:wrap;">
+                    <div>核心絕緣熱阻 T1: <span id="sum_T1">0.0000</span> K·m/W</div><div>內部結構熱阻 T2: <span id="sum_T2">0.0000</span> K·m/W</div><div>外部護套熱阻 T3: <span id="sum_T3">0.0000</span> K·m/W</div>
+                </div>
+            </div>
+        </div>
+    </div>
+<!-- 第三部分：環境鋪設、雙向修正與管路留空率 -->
+    <div class="section" style="margin-top: 25px; grid-column: span 3; width: 100%; box-sizing: border-box;">
+        <h3>3. 環境鋪設、雙向修正與管路留空率</h3>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+            <div class="form-group">
+                <label>敷設環境情境</label>
+                <select id="env_type" class="dropdown-select" onchange="toggleEnvFields()">
+                    <option value="conduit" selected>🏢 管路配線 (導線管內配置)</option>
+                    <option value="air">🪂 空中配線 - 電纜架 (Cable Tray)</option>
+                    <option value="direct_bury">🕳️ 地下直埋 / 土壤穿管埋設</option>
+                </select>
+            </div>
+            <div class="form-group pipe-row">
+                <label>電纜管道型號
+                    <button class="inline-btn" onclick="autoRecommendPipe(event)">⚡ 依40%法規推薦</button>
+                </label>
+                <select id="pipe_select" class="dropdown-select" onchange="updatePipeParams()">
+                    <option value="2_rsm" selected>2" 厚導線鋼管 (RSM)</option>
+                    <option value="2_pvc">2" PVC 塑膠電線管</option>
+                    <option value="3_rsm">3" 厚導線鋼管 (RSM)</option>
+                    <option value="3_pvc">3" PVC 塑膠電線管</option>
+                    <option value="4_rsm">4" 厚導線鋼管 (RSM)</option>
+                    <option value="4_pvc">4" PVC 塑膠電線管</option>
+                    <option value="custom">--自訂管道--</option>
+                </select>
+            </div>
+            <div class="form-group pipe-row">
+                <label>管道內徑 (mm)</label>
+                <input type="number" id="pipe_id" class="auto-calc" value="53.1" step="0.1">
+            </div>
+            <div class="form-group bury-row" style="display:none;">
+                <label>埋設深度 (cm)</label>
+                <input type="number" id="bury_depth" class="manual-input" value="150" step="5">
+            </div>
+            <div class="form-group bury-row" style="display:none;">
+                <label>土壤熱阻係數</label>
+                <div class="input-wrap">
+                    <input type="number" id="soil_g" class="manual-input" value="100" step="10">
+                    <span style="font-size:11px;color:#64748b">°C·cm/W</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>電纜群聚排列</label>
+                <select id="group_type" class="dropdown-select">
+                    <option value="1_1" selected>單條 (不修正)</option>
+                    <option value="1_3">單層並列 (1*3)</option>
+                    <option value="1_6">單層並列 (1*6)</option>
+                    <option value="2_2">雙層並列 (2*2)</option>
+                    <option value="2_3">雙層並列 (2*3)</option>
+                    <option value="2_4">雙層並列 (2*4)</option>
+                    <option value="3_3">三層並列 (3*3)</option>
+                    <option value="3_4">三層並列 (3*4)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>中心距離 S</label>
+                <select id="dist_s" class="dropdown-select">
+                    <option value="1d" selected>緊貼 (S=d)</option>
+                    <option value="2d">間隔 2倍外徑 (S=2d)</option>
+                    <option value="3d">間隔 3倍外徑 (S=3d)</option>
+                </select>
+            </div>
+        </div>
+        <div style="margin-top:15px; display:flex; gap:15px; font-size:13px; font-weight:bold; flex-wrap:wrap;">
+            <div id="fill_rate_box" style="background:#fef2f2; padding:8px 12px; border-radius:6px; border:1px solid #fee2e2; color:#991b1b;">
+                管路佔用率: <span id="calc_fill_rate">0.0%</span> 
+                <span id="warn_fill" class="warn-badge" style="display:inline-block;" title="違反限制！">⚠️ 超過法規40%限制</span>
+            </div>
+            <div style="background:#f0fdf4; padding:8px 12px; border-radius:6px; border:1px solid #dcfce7; color:#166534;">綜合群聚散熱修正: ✕<span id="factor_group">1.00</span><span id="warn_group_zero" class="warn-badge" style="display:inline-block;" title="散熱為零！">⚠️ 不允許此鋪設</span></div>
+            <div style="background:#f0fdf4; padding:8px 12px; border-radius:6px; border:1px solid #dcfce7; color:#166534;">環境溫度散熱修正: ✕<span id="factor_temp">1.00</span></div>
+            <div id="depth_box" style="display:none; background:#f0fdf4; padding:8px 12px; border-radius:6px; border:1px solid #dcfce7; color:#166534;">埋設深度變化率: ✕<span id="factor_depth">1.00</span></div>
+            <div id="soil_box" style="display:none; background:#f0fdf4; padding:8px 12px; border-radius:6px; border:1px solid #dcfce7; color:#166534;">土壤熱阻變化率: ✕<span id="factor_soil">1.00</span></div>
+        </div>
+    </div>
+
+<!-- 第四部分：安全電流終端比對結果 -->
+    <div style="grid-column: span 3; width: 100%; box-sizing: border-box; margin-top: 20px;">
+        <h3>4. 終端安全電流物理實算與臺灣法規對照</h3>
+        <button class="force-btn" onclick="validateInputs()">🔄 點擊一鍵強制重新計算 (更新並同步所有參數)</button>
+        <table class="result-table" style="margin-top:15px;">
+            <thead>
+                <tr>
+                    <th style="width:20%;">比對項目</th>
+                    <th style="width:40%; background-color:#16a34a;">IEC 60287 / JCS 168D 精密實算值</th>
+                    <th style="width:40%; background-color:#dc2626;">臺灣《用戶用電設備裝置規則》對照值</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-weight:bold; font-size:14px;">安全電流上限 (安培容量)</td>
+                    <td id="res_iec" style="font-size:24px; font-weight:bold; color:#15803d;">-</td>
+                    <td id="res_tw" style="font-size:24px; font-weight:bold; color:#b91c1c;">-</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold; font-size:14px; color:#2563eb;">電纜自身結構極限<br>(不含外部環境影響)</td>
+                    <td id="res_cable_only" style="font-size:20px; font-weight:bold; color:#1d4ed8;">-</td>
+                    <td id="res_tw_cable_only" style="font-size:20px; font-weight:bold; color:#1d4ed8;">-</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">計算細節與防呆診斷</td>
+                    <td id="detail_iec" style="text-align:left; font-size:12px; color:#475569; padding:10px;">-</td>
+                    <td id="detail_tw" style="text-align:left; font-size:12px; color:#475569; padding:10px;">-</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- 下方獨立常數分頁查詢系統 -->
+    <div style="grid-column: span 3; width: 100%; box-sizing: border-box;">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab(event, 'tab_law_temp')">材料熱阻與周溫修正表</button>
+            <button class="tab-btn" onclick="switchTab(event, 'tab_law_pipe')">導線管路安培容量表</button>
+            <button class="tab-btn" onclick="switchTab(event, 'tab_law_tray')">空中電纜架安培容量表</button>
+            <button class="tab-btn" onclick="switchTab(event, 'tab_law_bury')">地下管路安培容量表</button>
+            <button class="tab-btn" onclick="switchTab(event, 'tab_corr_td')">載流條數修正與t/d比</button>
+        </div>
+
+        <!-- 分頁1: 材料熱阻與周溫修正 -->
+        <div id="tab_law_temp" class="tab-content active">
+            <h4>📋 電纜各結構層材料常數庫 (出處: JCS 168D / IEC 60287)</h4>
+            <table>
+                <thead><tr><th>材料名稱</th><th>標準熱阻率 (K·m/W)</th><th>最高容許溫度 (°C)</th></tr></thead>
+                <tbody>
+                    <tr><td>XLPE (交聯聚乙烯)</td><td>3.5</td><td>90</td></tr>
+                    <tr><td>PVC (聚氯乙烯)</td><td>6.0</td><td>70</td></tr>
+                    <tr><td>PE (聚乙烯)</td><td>3.5</td><td>75</td></tr>
+                    <tr><td>雲母帶 (耐火)</td><td>6.0</td><td>999</td></tr>
+                    <tr><td>銅網 / 鋁箔 (隔離)</td><td>0.0026</td><td>999</td></tr>
+                    <tr><td>鋼帶 / 鐵線 (鎧裝)</td><td>0.02</td><td>999</td></tr>
+                    <tr><td>EPR (乙丙橡膠)</td><td>5.0</td><td>90</td></tr>
+                    <tr><td>低煙無鹵材料 (LSHF/LSZH)</td><td>6.0</td><td>90</td></tr>
+                    <tr style="background-color:#fffbeb;">
+                        <td style="font-weight:bold;color:#b45309;">🛠️ 自訂材料自訂與動態帶入區 (對應第一頁自訂選單)</td>
+                        <td><input type="number" id="c_mat_g" class="manual-input" value="4.5" style="width:100px;text-align:center;"></td>
+                        <td><input type="number" id="c_mat_t" class="manual-input" value="105" style="width:100px;text-align:center;"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>📋 【附表二五～一】導線絕緣物之最高容許溫度摘要</h4>
+            <table>
+                <thead><tr><th>絕緣物材質種類</th><th>最高容許溫度</th><th>絕緣物材質種類</th><th>最高容許溫度</th></tr></thead>
+                <tbody>
+                    <tr><td>PVC (聚氯乙烯) 導線</td><td>60 °C</td><td>PE (聚乙烯) 導線</td><td>75 °C</td></tr>
+                    <tr><td>交聯聚乙烯 (XLPE / CV線)</td><td style="font-weight:bold;color:#2563eb;">90 °C</td><td>乙丙橡膠 (EPR) 導線</td><td>90 °C</td></tr>
+                </tbody>
+            </table>
+
+            <h4>📋 【附表二五～七 / 二五～三】空氣與地下周溫散熱修正係數表 (90°C基準)</h4>
+            <table>
+                <thead><tr><th>現場周圍環境溫度 (°C)</th><th>【空氣配線表25-7】修正係數</th><th>【地下管路表25-3】修正係數</th></tr></thead>
+                <tbody>
+                    <tr><td>21 ~ 25 °C</td><td>1.04</td><td>1.00 (地下基準)</td></tr>
+                    <tr><td>26 ~ 30 °C</td><td>1.04</td><td>0.96</td></tr>
+                    <tr><td>31 ~ 35 °C</td><td>1.00 (空氣基準)</td><td>0.93</td></tr>
+                    <tr><td>36 ~ 40 °C</td><td>0.95</td><td>0.88</td></tr>
+                    <tr><td>41 ~ 45 °C</td><td>0.90</td><td>0.83</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分頁2: 管路配線安培容量表 (完整復原) -->
+        <div id="tab_law_pipe" class="tab-content">
+            <h4>📋 【附表二五～四】金屬導線管配線之導線安培容量 (90°C 交聯PE基準)</h4>
+            <table>
+                <thead><tr><th>標稱截面積 (mm²)</th><th>3 條以下</th><th>4 條</th><th>5 ~ 6 條</th><th>7 ~ 9 條</th></tr></thead>
+                <tbody>
+                    <tr><td>3.5</td><td style="font-weight:bold;color:#16a34a;">30 A</td><td>27 A</td><td>24 A</td><td>21 A</td></tr>
+                    <tr><td>5.5</td><td>39 A</td><td>35 A</td><td>31 A</td><td>27 A</td></tr>
+                    <tr><td>8</td><td>51 A</td><td>46 A</td><td>41 A</td><td>36 A</td></tr>
+                    <tr><td>14</td><td>74 A</td><td>67 A</td><td>59 A</td><td>52 A</td></tr>
+                    <tr><td>60</td><td>176 A</td><td>158 A</td><td>141 A</td><td>123 A</td></tr>
+                </tbody>
+            </table>
+
+            <h4>📋 【附表二五～五】PVC 管配線之導線安培容量 (60°C 絕緣物普通線基準)</h4>
+            <table>
+                <thead><tr><th>標稱截面積 (mm²)</th><th>3 條以下</th><th>4 條</th><th>5 ~ 6 條</th><th>7 ~ 9 條</th></tr></thead>
+                <tbody>
+                    <tr><td>3.5</td><td style="font-weight:bold;color:#dc2626;">19 A</td><td>16 A</td><td>14 A</td><td>12 A</td></tr>
+                    <tr><td>5.5</td><td>25 A</td><td>23 A</td><td>20 A</td><td>17 A</td></tr>
+                    <tr><td>8</td><td>33 A</td><td>30 A</td><td>25 A</td><td>20 A</td></tr>
+                    <tr><td>14</td><td>50 A</td><td>40 A</td><td>35 A</td><td>30 A</td></tr>
+                    <tr><td>60</td><td>115 A</td><td>105 A</td><td>90 A</td><td>75 A</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分頁3: 空中電纜架安培容量表 (完整復原) -->
+        <div id="tab_law_tray" class="tab-content">
+            <h4>📋 【附表三六二～一 / 三六二～二】多芯電纜敷設安培容量對照表 (35°C基準)</h4>
+            <table>
+                <thead><tr><th>標稱截面積 (mm²)</th><th>【表362-1】多芯電纜架上 (3條下)</th><th>【表362-2】空氣中單獨懸空 (結構極限)</th></tr></thead>
+                <tbody>
+                    <tr><td>3.5</td><td>30 A (90°C) / 19 A (60°C)</td><td style="font-weight:bold;color:#15803d;">35 A (90°C) / 24 A (60°C)</td></tr>
+                    <tr><td>5.5</td><td>39 A (90°C) / 28 A (60°C)</td><td>46 A (90°C) / 32 A (60°C)</td></tr>
+                    <tr><td>14</td><td>74 A (90°C) / 52 A (60°C)</td><td>85 A (90°C) / 60 A (60°C)</td></tr>
+                    <tr><td>60</td><td>176 A (90°C) / 125 A (60°C)</td><td>212 A (90°C) / 151 A (60°C)</td></tr>
+                </tbody>
+            </table>
+
+            <h4>📋 【附表三六二～三 / 三六二～四】六百伏特以下單芯電纜電纜架敷設安培容量 (90°C)</h4>
+            <table>
+                <thead><tr><th>標稱截面積 (mm²)</th><th>【表362-3】單芯拉開間隔 (距離&gt;d)</th><th>【表362-4】單芯三條/四條綑綁成一束</th></tr></thead>
+                <tbody>
+                    <tr><td>3.5</td><td style="font-weight:bold;color:#2563eb;">39 A</td><td>36 A</td></tr>
+                    <tr><td>5.5</td><td>54 A</td><td>49 A</td></tr>
+                    <tr><td>14</td><td>103 A</td><td>96 A</td></tr>
+                    <tr><td>60</td><td>270 A</td><td>244 A</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分頁4: 地下管路與自訂管道區 (完整復原) -->
+        <div id="tab_law_bury" class="tab-content">
+            <h4>📋 標準管道與放熱熱阻參數表 (對應第3段選項)</h4>
+            <table>
+                <thead><tr><th>管道名稱</th><th>材質</th><th>綜合放熱熱阻 (K·m/W)</th><th>管道內徑 (mm)</th></tr></thead>
+                <tbody>
+                    <tr><td>2" 厚導線鋼管 (RSM)</td><td>鋼管</td><td>0.35</td><td>53.1</td></tr>
+                    <tr><td>2" PVC 塑膠電線管</td><td>PVC</td><td>0.58</td><td>52.0</td></tr>
+                    <tr><td>3" 厚導線鋼管 (RSM)</td><td>鋼管</td><td>0.31</td><td>80.7</td></tr>
+                    <tr><td>3" PVC 塑膠電線管</td><td>PVC</td><td>0.52</td><td>77.0</td></tr>
+                    <tr><td>4" 厚導線鋼管 (RSM)</td><td>鋼管</td><td>0.28</td><td>104.7</td></tr>
+                    <tr><td>4" PVC 塑膠電線管</td><td>PVC</td><td>0.47</td><td>100.0</td></tr>
+                    <tr style="background-color:#fffbeb;">
+                        <td style="font-weight:bold;color:#b45309;">🛠️ 自訂管道資訊編輯區 (對應第一頁自訂選單)</td>
+                        <td>自訂</td>
+                        <td><input type="number" id="c_pipe_g" class="manual-input" value="0.40" style="width:100px;text-align:center;"></td>
+                        <td><input type="number" id="c_pipe_id" class="manual-input" value="60.0" style="width:100px;text-align:center;"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4 style="margin-top:20px;">📋 【附表二五～二】地下管路配線之導線安培容量表 (90°C 絕緣，土壤25°C基準)</h4>
+            <table>
+                <thead><tr><th>標稱截面積 (mm²)</th><th>同一地下管路或電纜內之載流導線數 (3條以下)</th></tr></thead>
+                <tbody>
+                    <tr><td>3.5</td><td style="font-weight:bold;color:#16a34a;">48 A</td></tr>
+                    <tr><td>5.5</td><td>61 A</td></tr>
+                    <tr><td>8</td><td>78 A</td></tr>
+                    <tr><td>14</td><td>110 A</td></tr>
+                    <tr><td>22</td><td>145 A</td></tr>
+                    <tr><td>60</td><td>255 A</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分頁5: 多條降載與幾何因數表 (完整復原) -->
+        <div id="tab_corr_td" class="tab-content">
+            <h4>📋 【附表二五～六】同一導線管 or 電纜內多條載流導線安培容量之修正係數</h4>
+            <table>
+                <thead><tr><th>載流導線數 (條數級距)</th><th>修正係數 (%)</th><th>載流導線數 (條數級距)</th><th>修正係數 (%)</th></tr></thead>
+                <tbody>
+                    <tr><td>4 條</td><td>90 %</td><td>10 ~ 20 條</td><td>50 %</td></tr>
+                    <tr><td>5 ~ 6 條</td><td>80 %</td><td>21 ~ 30 條</td><td>45 %</td></tr>
+                    <tr><td>7 ~ 9 條</td><td>70 %</td><td>31 ~ 40 條</td><td>40 %</td></tr>
+                </tbody>
+            </table>
+
+            <h4 style="margin-top:20px;">📋 多芯電纜絕緣熱阻幾何修正因數表 (t/d) (出處: JCS 168D)</h4>
+            <table>
+                <thead><tr><th>比值 t/d</th><th>2 芯 (2C)</th><th>3 芯 (3C)</th><th>4 芯 (4C)</th></tr></thead>
+                <tbody>
+                    <tr><td>0.1</td><td>0.28</td><td>0.27</td><td>0.25</td></tr>
+                    <tr><td>0.5</td><td>0.75</td><td>0.69</td><td>0.61</td></tr>
+                    <tr><td>1.0</td><td>1.06</td><td>0.96</td><td>0.84</td></tr>
+                    <tr><td>2.0</td><td>1.47</td><td>1.30</td><td>1.13</td></tr>
+                </tbody>
+            </tbody>
+            </table>
+        </div>
+    </div>
+</div> <!-- 關閉 container -->
+<script>
+// --- 核心全球靜態資料庫定義 ---
+const TD_TABLE = [
+    {td: 0.1, c2: 0.28, c3: 0.27, c4: 0.25}, {td: 0.3, c2: 0.56, c3: 0.52, c4: 0.47},
+    {td: 0.5, c2: 0.75, c3: 0.69, c4: 0.61}, {td: 1.0, c2: 1.06, c3: 0.96, c4: 0.84}, {td: 2.0, c2: 1.47, c3: 1.30, c4: 1.13}
+];
+const DEPTH_TABLE = [{d: 60, f: 1.09}, {d: 80, f: 1.05}, {d: 100, f: 1.03}, {d: 120, f: 1.01}, {d: 150, f: 1.00}];
+const SOIL_G_TABLE = [{g: 70, f: 1.09}, {g: 100, f: 1.00}, {g: 150, f: 0.88}, {g: 200, f: 0.80}, {g: 300, f: 0.69}];
+const TEMP_CORR_TABLE = [{t: 25, f: 1.08}, {t: 35, f: 1.04}, {t: 40, f: 1.00}, {t: 45, f: 0.96}, {t: 50, f: 0.91}];
+const SOIL_TEMP_TABLE = [{t: 20, f: 1.04}, {t: 25, f: 1.00}, {t: 30, f: 0.96}, {t: 35, f: 0.93}, {t: 40, f: 0.88}, {t: 45, f: 0.83}];
+const GROUP_TABLE = {
+    "1_1": {"1d": 1.0, "2d": 1.0, "3d": 1.0}, "1_3": {"1d": 0.85, "2d": 0.95, "3d": 1.0},
+    "1_6": {"1d": 0.80, "2d": 0.95, "3d": 1.0}, "2_2": {"1d": 0.70, "2d": 0.90, "3d": 0.95},
+    "2_3": {"1d": 0.70, "2d": 0.90, "3d": 0.95}, "2_4": {"1d": 0.60, "2d": 0.90, "3d": 0.95},
+    "3_3": {"1d": 0.0, "2d": 0.85, "3d": 0.90}, "3_4": {"1d": 0.0, "2d": 0.80, "3d": 0.85}
+};
+
+function updateMaterialAlpha() {
+    let mat = document.getElementById("cond_mat_select").value;
+    let alphaDisplay = document.getElementById("alpha_20_display");
+    let syncText = document.getElementById("L1_mat_sync");
+    if (mat === "cu") { alphaDisplay.value = "0.00393"; syncText.value = "銅導體基準"; } 
+    else { alphaDisplay.value = "0.00403"; syncText.value = "鋁導體基準"; }
+}
+
+function interpolate1D(val, table, keyX, keyY) {
+    if (val <= table[keyX]) return table[keyY];
+    if (val >= table[table.length - 1][keyX]) return table[table.length - 1][keyY];
+    for (let i = 0; i < table.length - 1; i++) {
+        if (val >= table[i][keyX] && val <= table[i+1][keyX]) {
+            let x0 = table[i][keyX], x1 = table[i+1][keyX];
+            let y0 = table[i][keyY], y1 = table[i+1][keyY];
+            return y0 + (val - x0) * (y1 - y0) / (x1 - x0);
+        }
+    }
+    return 1.0;
+}
+
+function getTdFactor(tdVal, cores) {
+    let key = "c" + cores;
+    if (tdVal <= TD_TABLE.td) return TD_TABLE[key];
+    if (tdVal >= TD_TABLE[TD_TABLE.length - 1].td) return TD_TABLE[TD_TABLE.length - 1][key];
+    for (let i = 0; i < TD_TABLE.length - 1; i++) {
+        if (tdVal >= TD_TABLE[i].td && tdVal <= TD_TABLE[i+1].td) {
+            let x0 = TD_TABLE[i].td, x1 = TD_TABLE[i+1].td;
+            let y0 = TD_TABLE[i][key], y1 = TD_TABLE[i+1][key];
+            return y0 + (tdVal - x0) * (y1 - y0) / (x1 - x0);
+        }
+    }
+    return 1.0;
+}
+
+function switchTab(evt, tabId) {
+    let contents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < contents.length; i++) contents[i].classList.remove("active");
+    let buttons = document.getElementsByClassName("tab-btn");
+    for (let i = 0; i < buttons.length; i++) buttons[i].classList.remove("active");
+    document.getElementById(tabId).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+
+function syncCores() { document.getElementById("core_n").value = document.getElementById("cable_c").value; }
+
+function toggleEnvFields() {
+    let env = document.getElementById("env_type").value;
+    let conduitRows = document.querySelectorAll(".pipe-row");
+    let buryRows = document.querySelectorAll(".bury-row");
+    conduitRows.forEach(el => el.style.display = (env === "conduit") ? "flex" : "none");
+    buryRows.forEach(el => el.style.display = (env === "direct_bury") ? "flex" : "none");
+    document.getElementById("fill_rate_box").style.display = (env === "conduit") ? "inline-block" : "none";
+    document.getElementById("depth_box").style.display = (env === "direct_bury") ? "inline-block" : "none";
+    document.getElementById("soil_box").style.display = (env === "direct_bury") ? "inline-block" : "none";
+}
+
+function updatePipeParams() {
+    let select = document.getElementById("pipe_select").value;
+    let idInput = document.getElementById("pipe_id");
+    if (select === "2_rsm") { idInput.value = "53.1"; idInput.readOnly = true; idInput.className = "auto-calc"; }
+    else if (select === "2_pvc") { idInput.value = "52.0"; idInput.readOnly = true; idInput.className = "auto-calc"; }
+    else if (select === "3_rsm") { idInput.value = "80.7"; idInput.readOnly = true; idInput.className = "auto-calc"; }
+    else if (select === "3_pvc") { idInput.value = "77.0"; idInput.readOnly = true; idInput.className = "auto-calc"; }
+    else if (select === "4_rsm") { idInput.value = "104.7"; idInput.readOnly = true; idInput.className = "auto-calc"; }
+    else if (select === "4_pvc") { idInput.value = "100.0"; idInput.readOnly = true; idInput.className = "auto-calc"; }
+    else if (select === "custom") {
+        idInput.value = document.getElementById("c_pipe_id").value; idInput.readOnly = false; idInput.className = "manual-input";
+    }
+}
+
+function autoRecommendPipe(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    let currentD = parseFloat(document.getElementById("dc_input").value) || 0;
+    for (let i = 2; i <= 11; i++) {
+        let mat = document.getElementById(`L${i}_mat`).value;
+        let t = parseFloat(document.getElementById(`L${i}_t`).value) || 0;
+        if (mat !== "none" && t > 0) currentD += 2 * t;
+    }
+    let cableArea = Math.PI * Math.pow((currentD / 2), 2);
+    const pipes = [
+        { id: "2_pvc", diameter: 52.0 }, { id: "2_rsm", diameter: 53.1 },
+        { id: "3_pvc", diameter: 77.0 }, { id: "3_rsm", diameter: 80.7 },
+        { id: "4_pvc", diameter: 100.0 }, { id: "4_rsm", diameter: 104.7 }
+    ];
+    let recommendedId = "custom";
+    for (let p of pipes) {
+        if ((cableArea / (Math.PI * Math.pow((p.diameter / 2), 2))) * 100 <= 40) { recommendedId = p.id; break; }
+    }
+    document.getElementById("pipe_select").value = recommendedId;
+    updatePipeParams();
+}
+
+function getMaterialProps(matId) {
+    let l_mat_g = parseFloat(document.getElementById("c_mat_g").value) || 4.5;
+    let l_mat_t = parseFloat(document.getElementById("c_mat_t").value) || 105;
+    switch(matId) {
+        case "xlpe":   return { g: 3.5, maxT: 90 };
+        case "pvc":    return { g: 6.0, maxT: 70 };
+        case "pe":     return { g: 3.5, maxT: 75 };
+        case "epr":    return { g: 5.0, maxT: 90 };
+        case "lszh":   return { g: 6.0, maxT: 90 };
+        case "mica":   return { g: 6.0, maxT: 999 };
+        case "screen": return { g: 0.0026, maxT: 999 };
+        case "armour": return { g: 0.02, maxT: 999 };
+        case "custom": return { g: l_mat_g, maxT: l_mat_t };
+        default:       return { g: 0.0, maxT: 999 };
+    }
+}
+function validateInputs() {
+    let specArea = parseFloat(document.getElementById("spec_area").value) || 0;
+    let areaUnit = document.getElementById("area_unit").value;
+    let Dc = parseFloat(document.getElementById("dc_input").value) || 0;
+    let r0 = parseFloat(document.getElementById("r0_input").value) || 0;
+    let r0Unit = document.getElementById("r0_unit").value;
+    let r0Temp = parseFloat(document.getElementById("r0_temp").value) || 20; 
+    let thetaMax = parseFloat(document.getElementById("theta_max").value) || 0;
+    let thetaAmb = parseFloat(document.getElementById("theta_amb").value) || 0;
+    let cores = parseInt(document.getElementById("cable_c").value) || 3;
+    let n = parseInt(document.getElementById("core_n").value) || 3;
+    let matType = document.getElementById("cond_mat_select").value;
+    
+    let targetAreaMM2 = specArea;
+    if (areaUnit === "awg") {
+        if (specArea === 1) targetAreaMM2 = 42.4; else if (specArea === 2) targetAreaMM2 = 33.6;
+        else if (specArea === 0) targetAreaMM2 = 53.5; else targetAreaMM2 = 5.26;
+    }
+
+    let approxD = 2 * Math.sqrt(targetAreaMM2 / Math.PI);
+    document.getElementById("warn_dc").style.display = (Dc < approxD * 0.7 || Dc > approxD * 1.6) ? "inline" : "none";
+    
+    let rho_base = (matType === "cu") ? 17.24 : 28.26;
+    let approxR = rho_base / targetAreaMM2;
+    let checkR0 = (r0Unit === "ohm_km") ? r0 : r0 * 1000;
+    document.getElementById("warn_r0").style.display = (checkR0 < approxR * 0.6 || checkR0 > approxR * 1.5) ? "inline" : "none";
+    document.getElementById("warn_area").style.display = (Dc < approxD * 0.7 || checkR0 > approxR * 1.5) ? "inline" : "none";
+
+    let minMaterialLimit = 999;
+    for (let i = 2; i <= 11; i++) {
+        let mat = document.getElementById(`L${i}_mat`).value;
+        if (mat !== "none") { let props = getMaterialProps(mat); if (props.maxT < minMaterialLimit) minMaterialLimit = props.maxT; }
+    }
+    document.getElementById("warn_temp").style.display = (thetaMax > minMaterialLimit) ? "inline" : "none";
+
+    let alpha20 = (matType === "cu") ? 0.00393 : 0.00403;
+    
+    // 【全新優化：自訂基準溫度補償】反推標準 R20
+    let raw_rTemp_m = (r0Unit === "ohm_km") ? r0 / 1000 : r0; 
+    let r20_m = raw_rTemp_m / (1 + alpha20 * (r0Temp - 20)); 
+    let rdc_m = r20_m * (1 + alpha20 * (thetaMax - 20));
+    
+    let f = 60;
+    let condType = document.getElementById("cond_type").value;
+    let ks = (condType === "compacted") ? 0.8 : 1.0; 
+    let x4 = Math.pow((0.00875 * f * ks) / (rdc_m * 1000), 2);
+    let ys = x4 / (192 + x4);
+    let rac_m = rdc_m * (1 + ys);
+
+    // 【全新優化：三大電阻獨立單位下拉切換】
+    let u_r20 = document.getElementById("r20_unit_select").value;
+    let u_rdc = document.getElementById("rdc_unit_select").value;
+    let u_rac = document.getElementById("rac_unit_select").value;
+    
+    function formatResValue(valInOhmM, unit) {
+        if (unit === "ohm_km") return (valInOhmM * 1000).toExponential(4) + " Ω/km";
+        if (unit === "mohm_m") return (valInOhmM * 1000).toExponential(4) + " mΩ/m";
+        return valInOhmM.toExponential(4) + " Ω/m";
+    }
+    
+    document.getElementById("r20_m").value = formatResValue(r20_m, u_r20);
+    document.getElementById("rdc_m").value = formatResValue(rdc_m, u_rdc);
+    document.getElementById("rac_m").value = formatResValue(rac_m, u_rac);
+
+    let currentD = Dc;
+    document.getElementById("L1_outD").value = currentD.toFixed(2);
+    let T1_sum = 0, T2_sum = 0, T3_sum = 0;
+    
+    for (let i = 2; i <= 11; i++) {
+        let mat = document.getElementById(`L${i}_mat`).value;
+        let t = parseFloat(document.getElementById(`L${i}_t`).value) || 0;
+        let outD_el = document.getElementById(`L${i}_outD`);
+        let T_el = document.getElementById(`L${i}_T`);
+        
+        if (mat === "none" || t <= 0) {
+            outD_el.value = currentD.toFixed(2); T_el.value = "0.0000";
+        } else {
+            let nextD = currentD + 2 * t; let props = getMaterialProps(mat);
+            let Layer_T = (props.g / (2 * Math.PI)) * Math.log(nextD / currentD);
+            if (i === 3 && cores > 1) { Layer_T = Layer_T * getTdFactor(t / currentD, cores); }
+            outD_el.value = nextD.toFixed(2);
+            T_el.value = Layer_T.toFixed(4);
+            if (i <= 3) T1_sum += Layer_T; else if (i <= 9) T2_sum += Layer_T; else T3_sum += Layer_T;
+            currentD = nextD;
+        }
+    }
+    document.getElementById("sum_T1").textContent = T1_sum.toFixed(4);
+    document.getElementById("sum_T2").textContent = T2_sum.toFixed(4);
+    document.getElementById("sum_T3").textContent = T3_sum.toFixed(4);
+    let envType = document.getElementById("env_type").value;
+    let groupType = document.getElementById("group_type").value;
+    let distS = document.getElementById("dist_s").value;
+    let fGroup = GROUP_TABLE[groupType][distS];
+    document.getElementById("factor_group").textContent = fGroup.toFixed(2);
+    document.getElementById("warn_group_zero").style.display = (fGroup <= 0) ? "inline-block" : "none";
+
+    let fTemp = 1.0;
+    if (envType === "direct_bury") {
+        fTemp = interpolate1D(thetaAmb, SOIL_TEMP_TABLE, "t", "f");
+    } else {
+        fTemp = interpolate1D(thetaAmb, TEMP_CORR_TABLE, "t", "f");
+    }
+    document.getElementById("factor_temp").textContent = fTemp.toFixed(2);
+
+    let fDepth = 1.0, fSoil = 1.0, fillRate = 0.0, T4 = 0.09;
+
+    if (envType === "conduit") {
+        let pipeID = parseFloat(document.getElementById("pipe_id").value) || 53.1;
+        let cableArea = Math.PI * Math.pow((currentD / 2), 2);
+        let pipeArea = Math.PI * Math.pow((pipeID / 2), 2);
+        if (pipeArea > 0) fillRate = (cableArea / pipeArea) * 100;
+        document.getElementById("calc_fill_rate").textContent = fillRate.toFixed(1) + "%";
+        document.getElementById("warn_fill").style.display = (fillRate > 40) ? "inline-block" : "none";
+        T4 = (document.getElementById("pipe_select").value === "custom") 
+             ? (parseFloat(document.getElementById("c_pipe_g").value) || 0.4) 
+             : (document.getElementById("pipe_select").value.includes("pvc") ? 0.52 : 0.31);
+    } else if (envType === "direct_bury") {
+        let buryDepth = parseFloat(document.getElementById("bury_depth").value) || 150;
+        let soilG = parseFloat(document.getElementById("soil_g").value) || 100;
+        fDepth = interpolate1D(buryDepth, DEPTH_TABLE, "d", "f");
+        fSoil = interpolate1D(soilG, SOIL_G_TABLE, "g", "f");
+        document.getElementById("factor_depth").textContent = fDepth.toFixed(2);
+        document.getElementById("factor_soil").textContent = fSoil.toFixed(2);
+        T4 = 0.12;
+    }
+
+    let sumT = T1_sum + n * (T2_sum + T3_sum + T4);
+    let deltaTheta = thetaMax - thetaAmb;
+    let baseI = 0;
+    if (deltaTheta > 0 && (rac_m * sumT) > 0) baseI = Math.sqrt(deltaTheta / (rac_m * sumT));
+
+    let finalIEC = baseI * fGroup * fTemp * fDepth * fSoil;
+    if (fGroup <= 0 || thetaMax <= thetaAmb) finalIEC = 0;
+    document.getElementById("res_iec").textContent = finalIEC > 0 ? finalIEC.toFixed(2) + " A" : "無法敷設";
+    
+    document.getElementById("detail_iec").innerHTML = 
+        `• 導體完工總外徑(D11): ${currentD.toFixed(1)} mm<br>` +
+        `• 實算等效熱阻 (∑T): ${sumT.toFixed(4)} K·m/W<br>` +
+        `• 物理基本安培容量: ${baseI.toFixed(1)} A<br>` +
+        `• 綜合環境降載變化率: ✕${(fGroup * fTemp * fDepth * fSoil).toFixed(3)}`;
+    let sumT_cable_only = T1_sum + n * (T2_sum + T3_sum + 0.09);
+    let cableOnlyI = 0;
+    if (deltaTheta > 0 && (rac_m * sumT_cable_only) > 0) {
+        cableOnlyI = Math.sqrt((thetaMax - 35) / (rac_m * sumT_cable_only));
+    }
+    document.getElementById("res_cable_only").textContent = cableOnlyI > 0 ? cableOnlyI.toFixed(2) + " A" : "N/A";
+
+    let finalTW = 0, twBaseName = "", twLawClause = "", twCableOnlyLimit = 0;
+    if (targetAreaMM2 <= 2.5) twCableOnlyLimit = (thetaMax >= 90)? 29 : 20;
+    else if (targetAreaMM2 <= 4.5) twCableOnlyLimit = (thetaMax >= 90)? 35 : 24;
+    else if (targetAreaMM2 <= 7.0) twCableOnlyLimit = (thetaMax >= 90)? 46 : 32;
+    else if (targetAreaMM2 <= 11.0) twCableOnlyLimit = (thetaMax >= 90)? 60 : 42;
+    else twCableOnlyLimit = (thetaMax >= 90)? 85 : 60;
+    document.getElementById("res_tw_cable_only").textContent = twCableOnlyLimit.toFixed(1) + " A";
+
+    if (envType === "conduit") {
+        let isPVCSelect = document.getElementById("pipe_select").value.includes("pvc");
+        if (isPVCSelect && thetaMax < 75) {
+            twLawClause = "第25條 [表二五～五] PVC 管配線安培容量表";
+            if (targetAreaMM2 <= 2.5) { finalTW = 18; twBaseName = "2.0 mm"; }
+            else if (targetAreaMM2 <= 4.5) { finalTW = 19; twBaseName = "3.5 mm²"; }
+            else if (targetAreaMM2 <= 7.0) { finalTW = 25; twBaseName = "5.5 mm²"; }
+            else if (targetAreaMM2 <= 11.0) { finalTW = 33; twBaseName = "8.0 mm²"; }
+            else { finalTW = 50; twBaseName = "14 mm²"; }
+        } else {
+            twLawClause = "第25條 [表二五～四] 金屬導線管配線安培容量表";
+            if (targetAreaMM2 <= 2.5) { finalTW = 24; twBaseName = "2.0 mm"; }
+            else if (targetAreaMM2 <= 4.5) { finalTW = 30; twBaseName = "3.5 mm²"; }
+            else if (targetAreaMM2 <= 7.0) { finalTW = 39; twBaseName = "5.5 mm²"; }
+            else if (targetAreaMM2 <= 11.0) { finalTW = 51; twBaseName = "8.0 mm²"; }
+            else { finalTW = 74; twBaseName = "14 mm²"; }
+        }
+    } else if (envType === "air") {
+        if (cores === 1) {
+            twLawClause = "第362條 [表三六二～三] 單芯電纜架敷設容量表";
+            if (targetAreaMM2 <= 4.5) { finalTW = 39; twBaseName = "3.5 mm²"; }
+            else if (targetAreaMM2 <= 7.0) { finalTW = 54; twBaseName = "5.5 mm²"; }
+            else { finalTW = 75; twBaseName = "8.0 mm²"; }
+        } else {
+            twLawClause = "第362條 [表三六二～一] 多芯電纜架敷設容量表";
+            if (targetAreaMM2 <= 4.5) { finalTW = 30; twBaseName = "3.5 mm²"; }
+            else if (targetAreaMM2 <= 7.0) { finalTW = 39; twBaseName = "5.5 mm²"; }
+            else { finalTW = 51; twBaseName = "8.0 mm²"; }
+        }
+    } else {
+        twLawClause = "第25條 [表二五～二] 地下管路配線安培容量表";
+        if (targetAreaMM2 <= 4.5) { finalTW = 48; twBaseName = "3.5 mm²"; }
+        else if (targetAreaMM2 <= 7.0) { finalTW = 61; twBaseName = "5.5 mm²"; }
+        else { finalTW = 78; twBaseName = "8.0 mm²"; }
+    }
+
+    let twCorrFactor = 1.0;
+    if (envType === "conduit") {
+        if (n === 4) twCorrFactor = 0.9;
+        else if (n >= 5 && n <= 6) twCorrFactor = 0.8;
+        else if (n >= 7 && n <= 9) twCorrFactor = 0.7;
+        else if (n >= 10) twCorrFactor = 0.5;
+    }
+
+    let twTempFactor = 1.0;
+    if (envType === "direct_bury") { twTempFactor = interpolate1D(thetaAmb, SOIL_TEMP_TABLE, "t", "f"); } 
+    else { twTempFactor = interpolate1D(thetaAmb, TEMP_CORR_TABLE, "t", "f"); }
+
+    let correctedTW = finalTW * twCorrFactor * twTempFactor;
+    document.getElementById("res_tw").textContent = correctedTW.toFixed(1) + " A";
+    document.getElementById("detail_tw").innerHTML = 
+        `• 法規引用出處: 中華民國電工法規 ${twLawClause}<br>` +
+        `• 法規公制規格: ${matType==="cu"?"銅":"鋁"} / ${twBaseName}<br>` +
+        `• 基礎環境基準值: ${finalTW} A<br>` +
+        `• 修正係數: 條數✕${twCorrFactor.toFixed(2)} | 周溫✕${twTempFactor.toFixed(2)}<br>` +
+        `• 落差比對: ${finalIEC > 0 ? (((finalIEC - correctedTW)/correctedTW)*100).toFixed(1) + "%" : "N/A"}`;
+}
+
+window.onload = function() {
+    let allInputs = document.querySelectorAll("input, select");
+    allInputs.forEach(el => { el.addEventListener("input", validateInputs); el.addEventListener("change", validateInputs); });
+    updatePipeParams(); updateMaterialAlpha(); toggleEnvFields(); validateInputs();
+};
+</script>
+</body>
+</html>

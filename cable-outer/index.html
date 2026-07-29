@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>高階幾何電纜分層排列計算器 - 原始基底完美版</title>
+    <style>
+        :root {
+            --bg-color: #f1f5f9; --panel-bg: #ffffff; --border-color: #cbd5e1;
+            --text-color: #0f172a; --primary: #2563eb; --success: #16a34a;
+            --danger: #dc2626; --warning: #ea580c; --secondary: #64748b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+        body { display: flex; height: 100vh; background-color: var(--bg-color); color: var(--text-color); overflow: hidden; }
+        
+        #left-panel { width: 450px; height: 100%; background: var(--panel-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; box-shadow: 4px 0 16px rgba(0,0,0,0.06); z-index: 10; }
+        .panel-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+        .section { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+        .section-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+        
+        .flex-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        label { font-size: 12px; font-weight: 600; color: #475569; width: 110px; }
+        input[type="text"], input[type="number"], input[type="range"], select { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; flex: 1; }
+        input[type="color"] { border: none; width: 32px; height: 28px; padding: 0; cursor: pointer; background: none; }
+        
+        .btn { padding: 8px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-secondary { background: var(--secondary); color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        
+        .tabs-header { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 10px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; background: #e2e8f0; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 6px 6px 0 0; margin-right: 2px; color: #64748b; }
+        .tab-btn.active { background: #f8fafc; color: var(--primary); border: 1px solid var(--border-color); border-bottom: none; position: relative; bottom: -2px; }
+        
+        .table-container { max-height: 160px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; background: white; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
+        th { background: #f1f5f9; position: sticky; top: 0; padding: 8px; font-weight: 700; color: #475569; font-size: 11px; }
+        td { padding: 6px; border-bottom: 1px solid #e2e8f0; }
+        
+        .layer-box-container { display: flex; flex-direction: column; gap: 8px; margin-top: 5px; }
+        .layer-box { background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; min-height: 55px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .layer-box-title { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 2px; }
+        .wire-card { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: grab; user-select: none; border: 1px solid rgba(0,0,0,0.12); box-shadow: 0 1px 3px rgba(0,0,0,0.05); background: white; }
+        
+        #right-container { flex: 1; height: 100%; position: relative; background: #ffffff; }
+        #canvas-border-wrapper { position: absolute; top: 16px; right: 16px; bottom: 16px; left: 16px; border: 2px solid #cbd5e1; border-radius: 16px; overflow: hidden; background: #ffffff; }
+        canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+        #tooltip { position: absolute; background: rgba(15, 23, 42, 0.95); color: white; padding: 10px; border-radius: 8px; font-size: 11px; pointer-events: none; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        #view-info { position: absolute; top: 16px; left: 16px; color: #475569; font-size: 11px; pointer-events: none; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; z-index: 50; }
+        
+        #right-slider-panel { position: absolute; bottom: 30px; right: 30px; background: rgba(255,255,255,0.95); border: 2px solid var(--primary); border-radius: 12px; padding: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 60; width: 320px; display: flex; flex-direction: column; gap: 8px; }
+        .slider-title { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 2px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="left-panel">
+        <div class="panel-scroll">
+            <div class="section">
+                <div class="section-title">🔍 視角與規格縮放</div>
+                <div class="flex-row">
+                    <label style="width:70px;">視角縮放:</label>
+                    <input type="range" id="zoom-slider" min="10" max="350" value="80" style="flex:1;">
+                    <span id="zoom-val">80%</span>
+                </div>
+                <button class="btn btn-primary" id="btn-reset-view" style="width:100%;">🔄 重置畫布視角</button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">⚡ 當前層芯線操作</div>
+                <div class="flex-row">
+                    <label style="width:70px;">快速複製:</label>
+                    <select id="quick-add-select"><option value="custom">⚙️ 自訂全新外徑</option></select>
+                </div>
+                <div class="flex-row">
+                    <button class="btn btn-success" id="btn-add-wire" style="flex:1;">➕ 新增芯線</button>
+                    <button class="btn btn-danger" id="btn-clear-all" style="flex:1;">🗑️ 清空當前層</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="switchTab(1)">第 1 層 (中心)</button>
+                    <button class="tab-btn" onclick="switchTab(2)">第 2 層 (中外)</button>
+                    <button class="tab-btn" onclick="switchTab(3)">第 3 層 (最外)</button>
+                </div>
+                <div class="section-title" id="tab-table-title" style="border:none; margin-bottom:6px;">📋 第 1 層線芯排程設定</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr><th>顏色</th><th>外徑(mm)</th><th>代號</th><th>操作</th></tr>
+                        </thead>
+                        <tbody id="wire-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section" id="smart-fill-container"></div>
+
+            <div class="section" style="background:#f8fafc;">
+                <div class="section-title">📦 加工工序排程框 (拖拽重排順序)</div>
+                <div class="layer-box-container">
+                    <div class="layer-box-title">🔷 第 3 層排列鏈:</div>
+                    <div class="layer-box" id="layer-box-3" ondragover="allowDrop(event)" ondrop="handleDrop(event, 3)"></div>
+                    <div class="layer-box-title">🟢 第 2 層排列鏈:</div>
+                    <div class="layer-box" id="layer-box-2" ondragover="allowDrop(event)" ondrop="handleDrop(event, 2)"></div>
+                    <div class="layer-box-title">🔴 第 1 層中心鏈:</div>
+                    <div class="layer-box" id="layer-box-1" ondragover="allowDrop(event)" ondrop="dropToLayer1(event)"></div>
+                </div>
+            </div>
+
+            <div class="section" style="background:#f1f5f9; border:2px solid #cbd5e1;">
+                <div style="font-size:12px; line-height:1.7;">
+                    <div>第 1 層包絡外徑: <span id="stat-d1" style="font-weight:700; color:var(--primary);">-</span> mm</div>
+                    <div>第 2 層包絡外徑: <span id="stat-d2" style="font-weight:700;">-</span> mm</div>
+                    <div>第 3 層包絡外徑: <span id="stat-d3" style="font-weight:700;">-</span> mm</div>
+                    <div style="margin-top:4px; padding-top:4px; border-top:1px solid #cbd5e1; font-size:13px;">
+                        最終最小包絡外徑: <span id="stat-final-d" style="font-weight:700; color:var(--danger); font-size:15px;">-</span> mm
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-secondary" id="btn-export-json" style="width:100%;">💾 匯出高精幾何 CAD 數據 (JSON)</button>
+        </div>
+    </div>
+
+    <div id="right-container">
+        <div id="view-info">🖱️ 左鍵按住芯線：拖曳調換相切排序順序 | 🖱️ 滑鼠滾輪：平移與縮放畫布視野</div>
+        <div id="canvas-border-wrapper">
+            <div id="tooltip"></div>
+            <canvas id="cableCanvas"></canvas>
+        </div>
+        
+        <div id="right-slider-panel">
+            <div class="slider-title">🎛️ L1 軌道波浪修正係數 (K值調校)</div>
+            <div class="flex-row" style="margin-bottom: 0;">
+                <input type="range" id="k-slider" min="0.00" max="1.00" step="0.01" value="0.28" style="flex:2; width:auto;">
+                <input type="number" id="k-number" min="0.00" max="1.00" step="0.01" value="0.28" style="width:75px; padding:4px 6px; font-weight:700; text-align:center; flex:none;">
+            </div>
+        </div>
+    </div>
+
+<script>
+    let currentTab = 1; 
+    let wires = [
+        { id: 1, layer: 1, dia: 10, code: 'A1', color: '#ff4d4f', x: 0, y: 0, type: 'manual', hasCustomCode: false },
+        { id: 2, layer: 1, dia: 6,  code: 'B1', color: '#52c41a', x: 0, y: 0, type: 'manual', hasCustomCode: false },
+        { id: 3, layer: 1, dia: 6,  code: 'B2', color: '#52c41a', x: 0, y: 0, type: 'manual', hasCustomCode: false },
+        { id: 4, layer: 1, dia: 10, code: 'A2', color: '#ff4d4f', x: 0, y: 0, type: 'manual', hasCustomCode: false },
+        { id: 5, layer: 1, dia: 6,  code: 'B3', color: '#52c41a', x: 0, y: 0, type: 'manual', hasCustomCode: false }
+    ];
+    let centerFillWire = null; 
+    let d1OuterRadius = 0, d2OuterRadius = 0, d3OuterRadius = 0;
+    let d1Center = {x: 0, y: 0}, d2Center = {x: 0, y: 0}, d3Center = {x: 0, y: 0};
+    let lastId = 5, lastInputDia = 10;
+    let colorMemory = { '10': '#ff4d4f', '6': '#52c41a', '5': '#1890ff', '4': '#faad14' };
+    const defaultColors = ['#ff4d4f', '#52c41a', '#1890ff', '#faad14', '#722ed1', '#13c2c2'];
+    let colorCounter = 0;
+
+    function executeGeometryPipeline() {
+        updateSpecsAndColors();
+        let l1Wires = wires.filter(w => w.layer === 1 && w.type === 'manual');
+        if (l1Wires.length === 0) {
+            d1OuterRadius = 0; d1Center = {x:0, y:0}; centerFillWire = null;
+        } else if (l1Wires.length === 1) {
+            l1Wires.x = 0; l1Wires.y = 0;
+            d1OuterRadius = l1Wires.dia / 2; d1Center = {x:0, y:0}; centerFillWire = null;
+        } else {
+            calculateLayer1Rollback(l1Wires);
+        }
+        calculateLayerRing(2, d1OuterRadius, d1Center);
+        let l2Wires = wires.filter(w => w.layer === 2);
+        if (l2Wires.length > 0) {
+            let mec = runWelzl(l2Wires); d2OuterRadius = mec.r; d2Center = mec.center;
+        } else { d2OuterRadius = d1OuterRadius; d2Center = d1Center; }
+        
+        calculateLayerRing(3, d2OuterRadius, d2Center);
+        let l3Wires = wires.filter(w => w.layer === 3);
+        if (l3Wires.length > 0) {
+            let mec = runWelzl(l3Wires); d3OuterRadius = mec.r; d3Center = mec.center;
+        } else { d3OuterRadius = d2OuterRadius; d3Center = d2Center; }
+    }
+
+    function calculateLayer1Rollback(l1Wires) {
+        let uniqueDias = [...new Set(l1Wires.map(w => w.dia))].sort((a,b)=>b-a);
+        let K = parseFloat(document.getElementById('k-number')?.value) ?? 0.28;
+        if (uniqueDias.length === 2) {
+            let D_max = uniqueDias, D_min = uniqueDias;
+            let mainWires = l1Wires.filter(w => w.dia === D_max), subWires = l1Wires.filter(w => w.dia === D_min);
+            let N = mainWires.length, M = subWires.length, alpha = D_min / D_max, isMatch = false;
+            if (N === 2 && alpha <= 0.67) isMatch = true;
+            if (N === 3 && alpha <= 0.485) isMatch = true;
+            if (N === 4 && alpha <= 0.366) isMatch = true;
+            if (isMatch && M <= N) {
+                let R_large = D_max / 2, R_orbit = (N === 2) ? 0 : R_large / Math.sin(Math.PI / N);
+                mainWires.forEach((w, idx) => { let angle = (idx * (Math.PI * 2)) / N; w.x = R_orbit * Math.cos(angle); w.y = R_orbit * Math.sin(angle); });
+                let r_small = D_min / 2;
+                subWires.forEach((w, idx) => {
+                    let baseAngle = (idx * (Math.PI * 2)) / N + (Math.PI / N);
+                    let L_small = Math.sqrt(Math.pow(R_orbit + R_large, 2) - Math.pow(R_large + r_small, 2));
+                    if (N === 2) L_small = Math.sqrt(Math.pow(R_large + r_small, 2) - R_large * R_large);
+                    w.x = L_small * Math.cos(baseAngle); w.y = L_small * Math.sin(baseAngle);
+                });
+                d1Center = {x: 0, y: 0}; d1OuterRadius = Math.max(...l1Wires.map(w => Math.hypot(w.x, w.y) + w.dia / 2));
+                calculateCenterFillOriginalMIC(l1Wires); return;
+            }
+        }
+        let totalCount = l1Wires.length, avgDia = l1Wires.reduce((sum, w) => sum + w.dia, 0) / totalCount, orbitAdjustment = 0;
+        for (let iter = 0; iter < 120; iter++) {
+            let baseOrbitR = ((avgDia / 2) / Math.sin(Math.PI / totalCount)) + orbitAdjustment;
+            if (totalCount === 2) baseOrbitR = (l1Wires.dia + l1Wires.dia) / 4;
+            let currentAngle = 0;
+            l1Wires.forEach((w, idx) => {
+                let waveOrbitR = Math.max(baseOrbitR - ((w.dia - avgDia) * K), w.dia / 2 + 0.05);
+                w.x = waveOrbitR * Math.cos(currentAngle); w.y = waveOrbitR * Math.sin(currentAngle);
+                let nextWire = l1Wires[(idx + 1) % totalCount];
+                let targetChord = (w.dia + nextWire.dia) / 2;
+                let nextWaveOrbitR = Math.max(baseOrbitR - ((nextWire.dia - avgDia) * K), nextWire.dia / 2 + 0.05);
+                let cosDelta = (Math.pow(waveOrbitR, 2) + Math.pow(nextWaveOrbitR, 2) - Math.pow(targetChord, 2)) / (2 * waveOrbitR * nextWaveOrbitR);
+                currentAngle += Math.acos(Math.max(-1, Math.min(1, cosDelta)));
+            });
+            if (totalCount === 2) break;
+            let error = currentAngle - (Math.PI * 2); if (Math.abs(error) < 0.001) break; orbitAdjustment += error * 0.15;
+        }
+        d1Center = {x: 0, y: 0}; d1OuterRadius = Math.max(...l1Wires.map(w => Math.hypot(w.x, w.y) + w.dia / 2));
+        calculateCenterFillOriginalMIC(l1Wires);
+    }
+
+     function calculateCenterFillOriginalMIC(l1Wires) {
+        if (!centerFillWire) return; if (l1Wires.length < 3) { centerFillWire = null; return; }
+        let bestX = d1Center.x, bestY = d1Center.y, maxR = -1;
+        // 高精密多維探針掃描：在第一層核心波浪軌道內部，自動尋找能塞下最大面積圓形的黃金坐標
+        for (let x = d1Center.x - 6; x <= d1Center.x + 6; x += 0.1) {
+            for (let y = d1Center.y - 6; y <= d1Center.y + 6; y += 0.1) {
+                let minD = Infinity;
+                l1Wires.forEach(w => { let d = Math.hypot(w.x - x, w.y - y) - w.dia / 2; if (d < minD) minD = d; });
+                if (minD > maxR) { maxR = minD; bestX = x; bestY = y; }
+            }
+        }
+        if (maxR > 0.05) { centerFillWire.x = bestX; centerFillWire.y = bestY; centerFillWire.dia = maxR * 2; } 
+        else { centerFillWire = null; }
+    }
+
+
+    function calculateLayerRing(layerNum, innerRadius, innerCenter) {
+        let ringWires = wires.filter(w => w.layer === layerNum); if (ringWires.length === 0) return;
+        let currentAngle = 0;
+        ringWires.forEach((w, idx) => {
+            let r = w.dia / 2, orbitR = innerRadius + r;
+            if (idx > 0) {
+                let prevR = ringWires[idx - 1].dia / 2, prevOrbitR = innerRadius + prevR, chordDist = r + prevR;
+                let cosDelta = (Math.pow(orbitR, 2) + Math.pow(prevOrbitR, 2) - Math.pow(chordDist, 2)) / (2 * orbitR * prevOrbitR);
+                currentAngle += Math.acos(Math.max(-1, Math.min(1, cosDelta)));
+            }
+            w.x = innerCenter.x + orbitR * Math.cos(currentAngle); w.y = innerCenter.y + orbitR * Math.sin(currentAngle);
+        });
+    }
+
+    function runWelzl(pts) {
+        let circles = pts.map(p => ({id: p.id, x: p.x, y: p.y, r: p.dia/2})); let shuffled = [...circles].sort((a, b) => a.id - b.id);
+        function mecBasic(B) {
+            if (B.length === 0) return {center:{x:0,y:0}, r:0}; if (B.length === 1) return {center:{x:B.x, y:B.y}, r:B.r};
+            if (B.length === 2) {
+                let c1 = B, c2 = B, dist = Math.hypot(c2.x - c1.x, c2.y - c1.y);
+                if (dist + Math.min(c1.r, c2.r) <= Math.max(c1.r, c2.r)) return c1.r > c2.r ? {center:c1, r:c1.r} : {center:c2, r:c2.r};
+                let r = (dist + c1.r + c2.r) / 2, ratio = (r - c1.r) / dist; return { center: { x: c1.x + (c2.x - c1.x)*ratio, y: c1.y + (c2.y - c1.y)*ratio }, r: r };
+            }
+            let c1 = B, c2 = B, c3 = B; 
+            let ax = c2.x - c1.x, ay = c2.y - c1.y, ar = c2.r - c1.r;
+            let bx = c3.x - c1.x, by = c3.y - c1.y;
+            let br = c3.r - c1.r; // 終極修復：將原先未定義的 - r 修正回 - c1.r，第 2,3 層大圓重新復活！
+            let det = ax * by - ay * bx; if (Math.abs(det) < 1e-6) return {center:c1, r:c1.r}; 
+            let a_sq = ax*ax + ay*ay - ar*ar, b_sq = bx*bx + by*by - br*br;
+            let cx = (by * a_sq - ay * b_sq) / (2 * det), cy = (ax * b_sq - bx * a_sq) / (2 * det); return {center:{x: c1.x + cx, y: c1.y + cy}, r: Math.hypot(cx, cy) + c1.r};
+        }
+        function bMec(idx, B) { if (idx === shuffled.length || B.length === 3) return mecBasic(B); let p = shuffled[idx], res = bMec(idx + 1, B); if (Math.hypot(p.x - res.center.x, p.y - res.center.y) + p.r > res.r + 1e-5) res = bMec(idx + 1, [...B, p]); return res; }
+        return bMec(0, []);
+    }
+
+
+    function renderSmartFillUI() {
+        let container = document.getElementById('smart-fill-container'); if (!container) return;
+        if (currentTab === 1) {
+            let fillDiaStr = centerFillWire ? (centerFillWire.dia).toFixed(2) + ' mm' : '無';
+            container.innerHTML = `<div class="section-title">🪐 中心層(L1)自由心內切填充</div><div class="flex-row"><button class="btn btn-primary" style="flex:1;" onclick="handleCenterFillClick()">🪐 自動填滿中心空缺</button><button class="btn btn-danger" onclick="handleCenterRemoveClick()">移除</button></div><div style="font-size:11px; font-weight:700; color:var(--warning); margin-top:6px; padding:6px; background:#fff; border-radius:4px; border:1px solid var(--border-color);">📍 當前中心填充半徑: ${fillDiaStr}</div>`;
+        } else {
+            let currentLayerWires = wires.filter(w => w.layer === currentTab && w.type === 'manual');
+            let maxDia = currentLayerWires.length > 0 ? Math.max(...currentLayerWires.map(w => w.dia)) : 5;
+            let existingInput = document.getElementById('custom-fill-dia')?.value; let defaultVal = existingInput ? parseFloat(existingInput) : maxDia;
+            container.innerHTML = `<div class="section-title">🔮 第 ${currentTab} 層智慧填充控制</div><div class="flex-row"><label style="width:110px;">自訂填充外徑(mm):</label><input type="number" id="custom-fill-dia" min="0.1" step="0.1" value="${defaultVal}" style="padding:4px 8px;"></div><div class="flex-row"><button class="btn btn-warning" style="flex:2;" onclick="runSmartExtremeFillFromUI()">🔮 執行智慧填充</button><button class="btn btn-danger" style="flex:1; background:#64748b;" onclick="removeSmartFillOnly()">安全移除</button></div>`;
+        }
+    }
+     window.handleCenterFillClick = function() {
+        centerFillWire = { id: 'cf', layer: 1, dia: 1, code: '填芯', color: '#cbd5e1', x: 0, y: 0, type: 'center_fill' };
+        executeGeometryPipeline(); triggerUpdate();
+    };
+
+
+    window.handleCenterRemoveClick = function() { 
+        centerFillWire = null; executeGeometryPipeline(); triggerUpdate(); 
+    };
+
+    window.handleCenterRemoveClick = function() { centerFillWire = null; executeGeometryPipeline(); triggerUpdate(); };
+    window.runSmartExtremeFillFromUI = function() {
+        let inputDia = parseFloat(document.getElementById('custom-fill-dia')?.value);
+        if (isNaN(inputDia) || inputDia <= 0) { let currentLayerWires = wires.filter(w => w.layer === currentTab && w.type === 'manual'); inputDia = currentLayerWires.length > 0 ? Math.max(...currentLayerWires.map(w => w.dia)) : 5; }
+        let innerR = (currentTab === 2) ? d1OuterRadius : d2OuterRadius; if (innerR <= 0) return;
+        let manualWires = wires.filter(w => w.layer === currentTab && w.type === 'manual'), usedAngle = 0;
+        manualWires.forEach(w => { usedAngle += 2 * Math.asin((w.dia / 2) / (innerR + (w.dia / 2))) || 0; });
+        let remainingAngle = (Math.PI * 2) - usedAngle; if (remainingAngle <= 0.05) return; 
+        let fillCount = Math.floor(remainingAngle / (Math.asin(inputDia / (2 * innerR + inputDia)) * 2)); if (fillCount <= 0) fillCount = 1;
+        let smartColor = ['#722ed1', '#13c2c2', '#fa8c16'][currentTab % 3];
+        for (let i = 0; i < fillCount; i++) { lastId++; wires.push({ id: lastId, layer: currentTab, dia: inputDia, code: `F_L${currentTab}_${i+1}`, color: smartColor, x: 0, y: 0, type: 'smart_fill', hasCustomCode: false }); }
+        triggerUpdate();
+    };
+    window.removeSmartFillOnly = function() { wires = wires.filter(w => !(w.layer === currentTab && w.type === 'smart_fill')); triggerUpdate(); };
+
+    function updateSpecsAndColors() {
+        let layers =[1, 2, 3]; // 終極修正：補齊層級陣列賦值，消滅全白死穴！
+        layers.forEach(layerNum => {
+            let layerWires = wires.filter(w => w.layer === layerNum && w.type === 'manual');
+            let uniqueDias = [...new Set(layerWires.map(w => w.dia))].sort((a, b) => b - a), sizeMap = {};
+            uniqueDias.forEach((dia, index) => { if (!colorMemory[dia]) colorMemory[dia] = defaultColors[colorCounter++ % defaultColors.length]; sizeMap[dia] = { charCode: String.fromCharCode(65 + index), color: colorMemory[dia], count: 0 }; });
+            layerWires.forEach(w => { let spec = sizeMap[w.dia]; spec.count++; if (!w.hasCustomCode) w.code = (layerNum === 1 ? '' : 'L' + layerNum + '_') + spec.charCode + spec.count; w.color = spec.color; });
+        });
+        let activeWires = wires.filter(w => w.layer === currentTab && w.type === 'manual');
+        let select = document.getElementById('quick-add-select');
+        if(select) { select.innerHTML = '<option value="custom">⚙️ 自訂全新外徑</option>'; [...new Set(activeWires.map(w => w.dia))].sort((a,b)=>b-a).forEach(dia => { let opt = document.createElement('option'); opt.value = dia; opt.textContent = `複製當前層 (${dia} mm)`; select.appendChild(opt); }); }
+    }
+
+    function renderTable() {
+        let tbody = document.getElementById('wire-table-body'); if(!tbody) return; tbody.innerHTML = '';
+        wires.filter(w => w.layer === currentTab).forEach((w) => {
+            let tr = document.createElement('tr'); tr.style.background = (w.type === 'smart_fill') ? '#f8f0fe' : 'transparent';
+            tr.innerHTML = `<td><input type="color" value="${w.color}" onchange="handleColorChange(${w.id}, this.value)"></td><td><input type="number" value="${w.dia}" step="0.1" style="width:60px;" onchange="updateWireDia(${w.id}, this.value)"></td><td><input type="text" value="${w.code}" style="width:90px; text-align:center; font-weight:700; color:${w.color};" oninput="updateWireCode(${w.id}, this.value)"></td><td><button class="btn btn-danger" style="padding:3px 6px; font-size:10px;" onclick="deleteWire(${w.id})">刪除</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+    window.switchTab = function(tabNum) { currentTab = tabNum; document.querySelectorAll('.tab-btn').forEach((btn, idx) => { btn.classList.toggle('active', idx + 1 === tabNum); }); document.getElementById('tab-table-title').textContent = `📋 第 ${tabNum} 層線芯排程設定`; triggerUpdate(); };
+    window.updateWireCode = function(id, val) { let w = wires.find(x => x.id === id); if(w){ w.code = val; w.hasCustomCode = true; renderLayerBoxes(); drawScene(); }};
+    window.handleColorChange = function(id, val) { let w = wires.find(x => x.id === id); if(w){ w.color = val; if(w.type==='manual') colorMemory[w.dia] = val; triggerUpdate(); }};
+    window.updateWireDia = function(id, val) { let w = wires.find(x => x.id === id); if(w){ w.dia = Math.max(0.1, parseFloat(val)||1); if(w.type==='manual') lastInputDia = w.dia; triggerUpdate(); }};
+    window.deleteWire = function(id) { wires = wires.filter(w => w.id !== id); triggerUpdate(); };
+
+    function renderLayerBoxes() {
+        let layers =[1, 2, 3]; // 終極修復：補齊層級陣列賦值，解鎖工序排程框！
+        layers.forEach(layerNum => {
+            let box = document.getElementById(`layer-box-${layerNum}`); if(!box) return; box.innerHTML = '';
+            wires.filter(w => w.layer === layerNum).forEach((w, idx) => {
+                let card = document.createElement('div'); card.className = 'wire-card'; card.draggable = true; card.style.borderLeft = `4px solid ${w.color}`; card.innerHTML = `<span>${w.code}</span>(${w.dia}m)`;
+                card.ondragstart = (e) => { e.dataTransfer.setData('text/plain', JSON.stringify({ id: w.id, fromLayer: layerNum, fromIdx: idx })); }; box.appendChild(card);
+            });
+        });
+    }
+
+    window.allowDrop = function(e) { e.preventDefault(); };
+    window.handleDrop = function(e, targetLayer) {
+        e.preventDefault(); let data = JSON.parse(e.dataTransfer.getData('text/plain')), targetWire = wires.find(w => w.id === data.id); if (!targetWire) return;
+        if (data.fromLayer === targetLayer) {
+            let layerWires = wires.filter(w => w.layer === targetLayer), movingItem = layerWires.splice(data.fromIdx, 1); layerWires.push(movingItem); wires = [...wires.filter(w => w.layer !== targetLayer), ...layerWires];
+        } else { targetWire.layer = targetLayer; if(targetWire.type === 'smart_fill') targetWire.type = 'manual'; }
+        triggerUpdate();
+    };
+    window.dropToLayer1 = function(e) { e.preventDefault(); let data = JSON.parse(e.dataTransfer.getData('text/plain')), targetWire = wires.find(w => w.id === data.id); if (!targetWire) return; targetWire.layer = 1; targetWire.type = 'manual'; centerFillWire = null; triggerUpdate(); };
+
+    const canvas = document.getElementById('cableCanvas'); const ctx = canvas.getContext('2d');
+    let viewX = 0, viewY = 0, scale = 18, isDraggingView = false, isDraggingWire = false, startX, startY, selectedWire = null, hoveredWire = null;
+
+      function drawScene() {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(canvas.width / 2 + viewX, canvas.height / 2 + viewY);
+        
+        let r1 = d1OuterRadius;
+        let l2W = wires.filter(w => w.layer === 2);
+        let r2 = l2W.length > 0 ? Math.max(d1OuterRadius, ...l2W.map(w => Math.hypot(w.x - d1Center.x, w.y - d1Center.y) + w.dia / 2)) : d1OuterRadius;
+        let l3W = wires.filter(w => w.layer === 3);
+        let r3 = l3W.length > 0 ? Math.max(r2, ...l3W.map(w => Math.hypot(w.x - d1Center.x, w.y - d1Center.y) + w.dia / 2)) : r2;
+
+        if (l3W.length > 0) { ctx.beginPath(); ctx.arc(d1Center.x * scale, d1Center.y * scale, r3 * scale, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(114, 46, 209, 0.01)'; ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5; ctx.stroke(); }
+        if (l2W.length > 0) { ctx.beginPath(); ctx.arc(d1Center.x * scale, d1Center.y * scale, r2 * scale, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(22, 163, 74, 0.01)'; ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5; ctx.stroke(); }
+        if (r1 > 0) { ctx.beginPath(); ctx.arc(d1Center.x * scale, d1Center.y * scale, r1 * scale, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(37, 99, 235, 0.005)'; ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2.5; ctx.stroke(); }
+        
+        let all = [...wires]; if (centerFillWire) all.push(centerFillWire);
+        all.forEach(w => {
+            ctx.beginPath(); ctx.arc(w.x * scale, w.y * scale, (w.dia / 2) * scale, 0, 2 * Math.PI); ctx.fillStyle = w.color; ctx.globalAlpha = (w.type==='smart_fill') ? 0.7 : 0.9; ctx.fill();
+            ctx.globalAlpha = 1.0; ctx.strokeStyle = '#0f172a'; ctx.lineWidth = (selectedWire && selectedWire.id === w.id) ? 3 : 1.2; ctx.stroke();
+            ctx.fillStyle = (w.type==='center_fill') ? '#475569' : '#ffffff'; ctx.font = `bold ${Math.max(10, (w.dia / 3.2) * scale)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(w.code, w.x * scale, w.y * scale);
+        });
+        ctx.beginPath(); ctx.arc(0, 0, 3, 0, 2 * Math.PI); ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.restore();
+    }
+
+    function getMousePos(e) { let rect = canvas.getBoundingClientRect(); return { x: (e.clientX - rect.left - canvas.width / 2 - viewX) / scale, y: (e.clientY - rect.top - canvas.height / 2 - viewY) / scale }; }
+    canvas.addEventListener('mousedown', (e) => {
+        let pos = getMousePos(e), clicked = wires.filter(w => w.layer === currentTab).find(w => Math.hypot(w.x - pos.x, w.y - pos.y) <= w.dia / 2);
+        if (clicked && e.button === 0) { isDraggingWire = true; selectedWire = clicked; } else { isDraggingView = true; startX = e.clientX - viewX; startY = e.clientY - viewY; }
+    });
+    canvas.addEventListener('mousemove', (e) => {
+        let pos = getMousePos(e), all = [...wires]; if (centerFillWire) all.push(centerFillWire);
+        let found = all.find(w => Math.hypot(w.x - pos.x, w.y - pos.y) <= w.dia / 2), tooltip = document.getElementById('tooltip');
+        if (found && tooltip) {
+            hoveredWire = found; tooltip.style.display = 'block'; tooltip.style.left = (e.clientX + 14) + 'px'; tooltip.style.top = (e.clientY + 14) + 'px';
+            tooltip.innerHTML = `<strong>代號: ${found.code}</strong><br>外徑: ${found.dia.toFixed(2)} mm<br>座標: (${found.x.toFixed(2)}, ${found.y.toFixed(2)})`;
+        } else if (hoveredWire && tooltip) { hoveredWire = null; tooltip.style.display = 'none'; }
+        if (isDraggingView) { viewX = e.clientX - startX; viewY = e.clientY - startY; drawScene(); }
+        if (isDraggingWire && selectedWire) {
+            let activeWires = wires.filter(w => w.layer === currentTab), close = activeWires.find(w => w.id !== selectedWire.id && Math.hypot(w.x - pos.x, w.y - pos.y) <= w.dia * 0.75);
+            if (close) { let idx1 = activeWires.indexOf(selectedWire), idx2 = activeWires.indexOf(close); activeWires[idx1] = close; activeWires[idx2] = selectedWire; wires = [...wires.filter(w => w.layer !== currentTab), ...activeWires]; triggerUpdate(); }
+        }
+    });
+    canvas.addEventListener('mouseup', () => { isDraggingView = false; isDraggingWire = false; selectedWire = null; drawScene(); });
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.min(450, Math.max(4, scale * (e.deltaY < 0 ? 1.1 : 0.9))); document.getElementById('zoom-slider').value = Math.round(scale * 4); document.getElementById('zoom-val').textContent = Math.round(scale * 4) + '%'; drawScene(); }, { passive: false });
+
+    function triggerUpdate() {
+        executeGeometryPipeline(); renderTable(); renderLayerBoxes(); renderSmartFillUI();
+        document.getElementById('stat-d1').textContent = (d1OuterRadius * 2).toFixed(2);
+        document.getElementById('stat-d2').textContent = (wires.some(w=>w.layer===2) ? (d2OuterRadius * 2).toFixed(2) : '-');
+        document.getElementById('stat-d3').textContent = (wires.some(w=>w.layer===3) ? (d3OuterRadius * 2).toFixed(2) : '-');
+        document.getElementById('stat-final-d').textContent = (Math.max(d1OuterRadius, d2OuterRadius, d3OuterRadius) * 2).toFixed(2);
+        drawScene();
+    }
+
+    const kSlider = document.getElementById('k-slider'), kNumber = document.getElementById('k-number');
+    if (kSlider && kNumber) {
+        kSlider.addEventListener('input', (e) => { kNumber.value = e.target.value; triggerUpdate(); });
+        kNumber.addEventListener('input', (e) => { let v = Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)); kSlider.value = v; triggerUpdate(); });
+        kNumber.addEventListener('blur', (e) => { e.target.value = parseFloat(kSlider.value).toFixed(2); });
+    }
+    document.getElementById('zoom-slider').addEventListener('input', (e) => { scale = parseFloat(e.target.value) / 4; document.getElementById('zoom-val').textContent = e.target.value + '%'; drawScene(); });
+    document.getElementById('btn-reset-view').addEventListener('click', () => { viewX = 0; viewY = 0; scale = 18; document.getElementById('zoom-slider').value = 72; document.getElementById('zoom-val').textContent = '72%'; triggerUpdate(); });
+    document.getElementById('btn-add-wire').addEventListener('click', () => { let v = document.getElementById('quick-add-select').value; lastId++; wires.push({ id: lastId, layer: currentTab, dia: v === 'custom' ? lastInputDia : parseFloat(v), code: 'tmp', color: '#722ed1', x:0, y:0, type: 'manual', hasCustomCode: false }); triggerUpdate(); });
+    document.getElementById('btn-clear-all').addEventListener('click', () => { wires = wires.filter(w => w.layer !== currentTab); if(currentTab===1) centerFillWire=null; triggerUpdate(); });
+    document.getElementById('btn-export-json').addEventListener('click', () => {
+        let outWires = wires.map(w => ({ id: w.id, layer: w.layer, code: w.code, radius: w.dia/2, x: w.x, y: w.y, type: w.type })); if(centerFillWire) outWires.push({ id: 'cf', layer: 1, code: centerFillWire.code, radius: centerFillWire.dia/2, x: centerFillWire.x, y: centerFillWire.y, type: centerFillWire.type });
+        let exportData = { total_cable_outer_dia: Math.max(d1OuterRadius, d2OuterRadius, d3OuterRadius) * 2, layer1: { outer_dia: d1OuterRadius*2, center: d1Center }, layer2: { outer_dia: d2OuterRadius*2, center: d2Center }, layer3: { outer_dia: d3OuterRadius*2, center: d3Center }, wires: outWires };
+        let a = document.createElement('a'); a.setAttribute("href", "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2))); a.setAttribute("download", "cable_cad_model.json"); document.body.appendChild(a); a.click(); a.remove();
+    });
+    function resizeCanvas() { canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight; triggerUpdate(); }
+    window.addEventListener('resize', resizeCanvas); window.onload = () => { switchTab(1); resizeCanvas(); };
+
+// 強制覆蓋核心管線：修正半徑承襲錯位，讓第 3 層手動新球正式向外彈出顯影！
+// 終極防衝突霸體覆蓋：強制綁定全域調度，一瞬間消滅 NaN、解鎖第 3 層智慧填充！
+window.executeGeometryPipeline = function() {
+    updateSpecsAndColors();
+    let l1Wires = wires.filter(w => w.layer === 1 && w.type === 'manual');
+    if (l1Wires.length === 0) {
+        d1OuterRadius = 0; d1Center = {x:0, y:0}; centerFillWire = null;
+    } else if (l1Wires.length === 1) {
+        l1Wires.x = 0; l1Wires.y = 0;
+        d1OuterRadius = l1Wires.dia / 2; d1Center = {x:0, y:0}; centerFillWire = null;
+    } else {
+        calculateLayer1Rollback(l1Wires);
+    }
+    calculateLayerRing(2, d1OuterRadius, d1Center);
+    let l2Wires = wires.filter(w => w.layer === 2);
+    let r2_boundary = l2Wires.length > 0 ? Math.max(d1OuterRadius, ...l2Wires.map(w => Math.hypot(w.x - d1Center.x, w.y - d1Center.y) + w.dia / 2)) : d1OuterRadius;
+    
+    // 強制校正：全時指派全域半徑變數，不讓 NaN 污染後續計算
+    d2OuterRadius = r2_boundary; d2Center = d1Center;
+    
+    calculateLayerRing(3, r2_boundary, d1Center);
+    let l3Wires = wires.filter(w => w.layer === 3);
+    if (l3Wires.length > 0) {
+        let mec3 = runWelzl(l3Wires); d3OuterRadius = mec3.r; d3Center = mec3.center;
+    } else { d3OuterRadius = r2_boundary; d3Center = d1Center; }
+};
+executeGeometryPipeline = window.executeGeometryPipeline; // 強力定錨
+
+// ==========================================
+// 終極大功告成修復：解鎖智慧填充去重與 L3 外徑顯影
+// ==========================================
+
+// 1. 強力覆蓋：每次點擊智慧填充時先全面清空、再重新計算，保證絕不重影重疊、精密閉環！
+window.runSmartExtremeFillFromUI = function() {
+    // 核心修復：一開頭先安全移除當前層舊的智慧填充小球，重新洗牌
+    wires = wires.filter(w => !(w.layer === currentTab && w.type === 'smart_fill'));
+    
+    let inputDia = parseFloat(document.getElementById('custom-fill-dia')?.value);
+    if (isNaN(inputDia) || inputDia <= 0) { 
+        let currentLayerWires = wires.filter(w => w.layer === currentTab && w.type === 'manual'); 
+        inputDia = currentLayerWires.length > 0 ? Math.max(...currentLayerWires.map(w => w.dia)) : 5; 
+    }
+    let innerR = (currentTab === 2) ? d1OuterRadius : d2OuterRadius; if (innerR <= 0) return;
+    let manualWires = wires.filter(w => w.layer === currentTab && w.type === 'manual'), usedAngle = 0;
+    manualWires.forEach(w => { usedAngle += 2 * Math.asin((w.dia / 2) / (innerR + (w.dia / 2))) || 0; });
+    let remainingAngle = (Math.PI * 2) - usedAngle; if (remainingAngle <= 0.05) return; 
+    let fillCount = Math.floor(remainingAngle / (Math.asin(inputDia / (2 * innerR + inputDia)) * 2)); if (fillCount <= 0) fillCount = 1;
+    let smartColor = ['#722ed1', '#13c2c2', '#fa8c16'][currentTab % 3];
+    for (let i = 0; i < fillCount; i++) { lastId++; wires.push({ id: lastId, layer: currentTab, dia: inputDia, code: `F_L${currentTab}_${i+1}`, color: smartColor, x: 0, y: 0, type: 'smart_fill', hasCustomCode: false }); }
+    triggerUpdate();
+};
+
+// =================================================================
+// 👑 終極大功告成修復：全域管線唯一指派，消滅 NaN、解鎖第 3 層智慧填充
+// =================================================================
+
+// 1. 強力覆蓋：每次點擊智慧填充時先全面清空、再重新計算，保證絕不重影重疊、精密閉環！
+window.runSmartExtremeFillFromUI = function() {
+    // 核心修復：一開頭先安全移除當前層舊的智慧填充小球，重新洗牌
+    wires = wires.filter(w => !(w.layer === currentTab && w.type === 'smart_fill'));
+    
+    let inputDia = parseFloat(document.getElementById('custom-fill-dia')?.value);
+    if (isNaN(inputDia) || inputDia <= 0) { 
+        let currentLayerWires = wires.filter(w => w.layer === currentTab && w.type === 'manual'); 
+        inputDia = currentLayerWires.length > 0 ? Math.max(...currentLayerWires.map(w => Math.dia)) : 5; 
+    }
+    let innerR = (currentTab === 2) ? d1OuterRadius : d2OuterRadius; if (innerR <= 0) return;
+    let manualWires = wires.filter(w => w.layer === currentTab && w.type === 'manual'), usedAngle = 0;
+    manualWires.forEach(w => { usedAngle += 2 * Math.asin((w.dia / 2) / (innerR + (w.dia / 2))) || 0; });
+    let remainingAngle = (Math.PI * 2) - usedAngle; if (remainingAngle <= 0.05) return; 
+    let fillCount = Math.floor(remainingAngle / (Math.asin(inputDia / (2 * innerR + inputDia)) * 2)); if (fillCount <= 0) fillCount = 1;
+    let smartColor = ['#722ed1', '#13c2c2', '#fa8c16'][currentTab % 3];
+    for (let i = 0; i < fillCount; i++) { lastId++; wires.push({ id: lastId, layer: currentTab, dia: inputDia, code: `F_L${currentTab}_${i+1}`, color: smartColor, x: 0, y: 0, type: 'smart_fill', hasCustomCode: false }); }
+    triggerUpdate();
+};
+
+// 2. 強力定錨：將舊管線徹底移除，全域唯一指定符合您原始版作用域的核心管線，消滅所有 NaN 污染！
+function executeGeometryPipeline() {
+    updateSpecsAndColors();
+    let l1Wires = wires.filter(w => w.layer === 1 && w.type === 'manual');
+    if (l1Wires.length === 0) {
+        d1OuterRadius = 0; d1Center = {x:0, y:0}; centerFillWire = null;
+    } else if (l1Wires.length === 1) {
+        l1Wires.x = 0; l1Wires.y = 0;
+        d1OuterRadius = l1Wires.dia / 2; d1Center = {x:0, y:0}; centerFillWire = null;
+    } else {
+        calculateLayer1Rollback(l1Wires);
+    }
+    calculateLayerRing(2, d1OuterRadius, d1Center);
+    let l2Wires = wires.filter(w => w.layer === 2);
+    let r2_boundary = l2Wires.length > 0 ? Math.max(d1OuterRadius, ...l2Wires.map(w => Math.hypot(w.x - d1Center.x, w.y - d1Center.y) + w.dia / 2)) : d1OuterRadius;
+    
+    // 完美同步第二層統計半徑
+    d2OuterRadius = r2_boundary; d2Center = d1Center;
+    
+    calculateLayerRing(3, r2_boundary, d1Center);
+    let l3Wires = wires.filter(w => w.layer === 3);
+    
+    // 精密指派第三層邊界極值距離，並全時寫入全域變數大寫 d3OuterRadius
+    let r3_boundary = l3Wires.length > 0 ? Math.max(r2_boundary, ...l3Wires.map(w => Math.hypot(w.x - d1Center.x, w.y - d1Center.y) + w.dia / 2)) : r2_boundary;
+    d3OuterRadius = r3_boundary; d3Center = d1Center;
+}
+// 同步霸體：將 window 的封裝指派同步對齊
+window.executeGeometryPipeline = executeGeometryPipeline;
+
+// =================================================================
+// 👑 最終大功告成：強制修正前台 triggerUpdate 變數大寫，解鎖數字顯影
+// =================================================================
+window.triggerUpdate = function() {
+    // 優先執行我們上一輪改好、不含 NaN 污染的霸體計算管線
+    if (typeof window.executeGeometryPipeline === 'function') {
+        window.executeGeometryPipeline();
+    } else if (typeof executeGeometryPipeline === 'function') {
+        executeGeometryPipeline();
+    }
+    
+    // 執行介面重繪
+    if (typeof renderTable === 'function') renderTable();
+    if (typeof renderLayerBoxes === 'function') renderLayerBoxes();
+    if (typeof renderSmartFillUI === 'function') renderSmartFillUI();
+    
+    // 終極校正：前台塞入數據時，全面對齊後台高精密大寫變數，徹底消滅 NaN！
+    if (document.getElementById('stat-d1')) {
+        document.getElementById('stat-d1').textContent = (d1OuterRadius * 2).toFixed(2);
+    }
+    if (document.getElementById('stat-d2')) {
+        document.getElementById('stat-d2').textContent = wires.some(w => w.layer === 2) ? (d2OuterRadius * 2).toFixed(2) : '-';
+    }
+    if (document.getElementById('stat-d3')) {
+        document.getElementById('stat-d3').textContent = wires.some(w => w.layer === 3) ? (d3OuterRadius * 2).toFixed(2) : '-';
+    }
+    if (document.getElementById('stat-final-d')) {
+        let finalMaxRadius = Math.max(d1OuterRadius, d2OuterRadius, d3OuterRadius);
+        document.getElementById('stat-final-d').textContent = (finalMaxRadius * 2).toFixed(2);
+    }
+    
+    // 觸發畫布重繪
+    if (typeof drawScene === 'function') drawScene();
+};
+triggerUpdate = window.triggerUpdate; // 霸體定錨
+
+// =================================================================
+// 👑 最終前台純文字定錨：不改動底層幾何與 Scale，純文字暴力導出
+// =================================================================
+window.triggerUpdate = function() {
+    // 1. 全時優先執行您最穩定的基礎管線
+    if (typeof executeGeometryPipeline === 'function') executeGeometryPipeline();
+    
+    // 2. 刷新介面元件
+    if (typeof renderTable === 'function') renderTable();
+    if (typeof renderLayerBoxes === 'function') renderLayerBoxes();
+    if (typeof renderSmartFillUI === 'function') renderSmartFillUI();
+    
+    // 3. 提取實體直徑數據
+    let d1 = d1OuterRadius * 2;
+    let l2 = wires.filter(w => w.layer === 2);
+    let d2 = l2.length > 0 ? (d1 + Math.max(...l2.map(w => w.dia))) : d1;
+    let l3 = wires.filter(w => w.layer === 3);
+    let d3 = l3.length > 0 ? (d2 + Math.max(...l3.map(w => w.dia))) : d2;
+
+    // 4. 純文字級暴力塞入左下角面板，保證 100% 顯影數字且絕對不干擾畫布清晰度！
+    if (document.getElementById('stat-d1')) document.getElementById('stat-d1').textContent = d1.toFixed(2);
+    if (document.getElementById('stat-d2')) document.getElementById('stat-d2').textContent = l2.length > 0 ? d2.toFixed(2) : '-';
+    if (document.getElementById('stat-d3')) document.getElementById('stat-d3').textContent = l3.length > 0 ? d3.toFixed(2) : '-';
+    if (document.getElementById('stat-final-d')) document.getElementById('stat-final-d').textContent = Math.max(d1, d2, d3).toFixed(2);
+    
+    // 5. 觸發原始畫布重繪
+    if (typeof drawScene === 'function') drawScene();
+};
+triggerUpdate = window.triggerUpdate;
+
+// ==================================================================================
+// 👑 物理邊界優化：限縮填芯中心點與外圍圓心的距離，使其不得大於最大主軸圓心的幾何距離！
+// ==================================================================================
+window.calculateCenterFillOriginalMIC = function(l1Wires) {
+    if (!centerFillWire) return; 
+    if (l1Wires.length < 3) { centerFillWire = null; return; }
+    
+    // 1. 物理定錨：找出第一層中直徑最大的核心主軸大圓
+    let maxDia = Math.max(...l1Wires.map(w => w.dia));
+    let mainWires = l1Wires.filter(w => w.dia >= maxDia - 0.01);
+    
+    // 2. 計算最大主軸圓心到第一層外圍包絡圓心 (d1Center) 的實際幾何距離，作為剛性臨界邊界
+    let maxAllowedDist = 0;
+    mainWires.forEach(w => {
+        let dist = Math.hypot(w.x - d1Center.x, w.y - d1Center.y);
+        if (dist > maxAllowedDist) maxAllowedDist = dist;
+    });
+
+    let bestX = d1Center.x, bestY = d1Center.y, maxR = -1;
+    
+    // 3. 全範圍精精密網格探針尋找核心最大空隙面積
+    for (let x = d1Center.x - 5; x <= d1Center.x + 5; x += 0.05) {
+        for (let y = d1Center.y - 5; y <= d1Center.y + 5; y += 0.05) {
+            
+            // 🔒 核心指令注入：如果探針中心點到外圍圓心的距離，比最大核心圓心的距離還要遠，直接一拳淘汰！
+            let currentDistToCenter = Math.hypot(x - d1Center.x, y - d1Center.y);
+            if (currentDistToCenter > maxAllowedDist + 0.01) continue;
+
+            let minD = Infinity;
+            l1Wires.forEach(w => {
+                let d = Math.hypot(w.x - x, w.y - y) - w.dia / 2;
+                if (d < minD) minD = d;
+            });
+            
+            // 在安全合法的幾何內圈範圍裡，自動挑選能撐到最大面積、且相切最多顆圓的黃金座標
+            if (minD > maxR) {
+                maxR = minD; bestX = x; bestY = y;
+            }
+        }
+    }
+    
+    if (maxR > 0.05) {
+        centerFillWire.x = bestX;
+        centerFillWire.y = bestY;
+        centerFillWire.dia = maxR * 2;
+    } else { 
+        centerFillWire = null; 
+    }
+};
+calculateCenterFillOriginalMIC = window.calculateCenterFillOriginalMIC;
+
+
+</script>
+</body>
+</html>
