@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電纜銅網編織率試算與智慧設計工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9; color: #333; margin: 0; padding: 20px;
+        }
+        .container {
+            max-width: 1000px; margin: 0 auto; background: #fff; padding: 30px;
+            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h2 { color: #1a365d; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 0; }
+        .tabs { display: flex; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: #718096; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab.active { color: #2b6cb0; border-bottom: 2px solid #2b6cb0; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .form-group { margin-bottom: 15px; }
+        .flex-group { display: flex; gap: 10px; }
+        .flex-group div { flex: 1; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: #4a5568; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        input:focus, select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); }
+        .panel { background: #f7fafc; padding: 20px; border-radius: 8px; border: 1px solid #edf2f7; }
+        .result-box { background: #ebf8ff; border: 1px solid #bee3f8; padding: 15px; border-radius: 6px; margin-top: 20px; text-align: center; }
+        .result-value { font-size: 28px; font-weight: bold; color: #2b6cb0; }
+        button { background-color: #3182ce; color: white; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; transition: background 0.2s; margin-top: 10px; }
+        button:hover { background-color: #2b6cb0; }
+        .recommend-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        .recommend-table th, .recommend-table td { border: 1px solid #e2e8f0; padding: 8px; text-align: center; }
+        .recommend-table th { background-color: #edf2f7; color: #4a5568; }
+        .recommend-table tr:hover { background-color: #f7fafc; cursor: pointer; }
+        .hint { font-size: 12px; color: #718096; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('calc-tab')">📊 編織率計算與智慧設計</div>
+        <div class="tab" onclick="switchTab('setting-tab')">⚙️ 生產規則與公差分頁設定</div>
+    </div>
+
+    <!-- 主計算分頁 -->
+    <div id="calc-tab" class="tab-content active">
+        <div class="grid">
+            <!-- 左側：輸入與即時計算 -->
+            <div>
+                <h2>正向結構輸入</h2>
+                <div class="form-group">
+                    <label for="H2012">編織前外徑 (mm)</label>
+                    <input type="number" id="H2012" step="0.000001" value="6.562625" oninput="onOdChange()">
+                    <div class="hint" id="od-hint">系統將自動根據規則判定釘數</div>
+                </div>
+                <div class="form-group">
+                    <label for="C2010">編織銅線線徑 (mm)</label>
+                    <input type="number" id="C2010" step="0.01" value="0.12" oninput="calculateBraid()">
+                </div>
+                <div class="form-group">
+                    <label for="C2011">條數 (根數)</label>
+                    <input type="number" id="C2011" value="8" oninput="calculateBraid()">
+                </div>
+                <div class="form-group">
+                    <label for="C2013">交叉目數 (mesh)</label>
+                    <input type="number" id="C2013" value="8" oninput="calculateBraid()">
+                </div>
+                <div class="form-group">
+                    <label for="C2012">釘數 (錠數)</label>
+                    <select id="C2012" onchange="calculateBraid()">
+                        <option value="16">16 釘</option>
+                        <option value="24">24 釘</option>
+                        <option value="48">48 釘</option>
+                    </select>
+                </div>
+
+                <div class="result-box">
+                    <div>當前規格計算編織率</div>
+                    <div class="result-value" id="F2014">0.00%</div>
+                    <div class="hint" id="angle-hint">編織角度：0.00°</div>
+                </div>
+            </div>
+
+            <!-- 右側：目標編織率與反推設計 -->
+            <div>
+                <h2>🎯 目標編織率智慧設計</h2>
+                <div class="panel">
+                    <div class="form-group">
+                        <label for="target_rate">設定目標編織率 (%)</label>
+                        <input type="number" id="target_rate" step="0.1" value="70.0">
+                        <div class="hint" id="tolerance-hint">當前篩選區間：69.00% ~ 72.00% (依設定頁規則)</div>
+                    </div>
+                    <button type="button" onclick="recommendStructure()">🔍 依照目標生成接近的條數與目數</button>
+                    
+                    <div style="margin-top: 20px;">
+                        <label>💡 智慧優先推薦：結構最均勻組合 (條數與目數最接近)</label>
+                        <div style="max-height: 280px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px;">
+                            <table class="recommend-table">
+                               <thead>
+                                   <tr>
+                                       <th>條數</th>
+                                       <th>目數</th>
+                                       <th>預估編織率</th>
+                                       <th>結構均勻度</th>
+                                   </tr>
+                               </thead>
+                               <tbody id="recommend-body">
+                                   <tr>
+                                       <td colspan="4" style="color:#a0aec0; padding:20px;">請點擊上方按鈕生成推薦</td>
+                                   </tr>
+                               </tbody>
+                            </table>
+                        </div>
+                        <div class="hint" style="margin-top:8px;">* 系統已排除極端失衡結構 (例如條/目數差太多)，點擊該列即可直接套用。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定分頁 -->
+    <div id="setting-tab" class="tab-content">
+        <h2>⚙️ 生產上限與編織率公差規則設定</h2>
+        <p style="color:#718096; font-size:14px;">您可以在此自訂工廠製程極限與篩選範圍。修改儲存後將立即套用至智慧推薦。</p>
+        
+        <div class="panel" style="max-width: 600px; margin-bottom: 20px;">
+            <h3>1. 製程極限控制</h3>
+            <div class="form-group">
+                <label for="max_threads">推薦條數上限設定 (根數最大值)</label>
+                <input type="number" id="max_threads" value="10" min="1">
+                <div class="hint">* 智慧推薦生成時，超過此根數的組合會自動過濾</div>
+            </div>
+        </div>
+
+        <div class="panel" style="max-width: 600px; margin-bottom: 20px;">
+            <h3>2. 目標編織率接受公差範圍</h3>
+            <div class="flex-group">
+                <div class="form-group">
+                    <label for="tolerance_plus">正公差 (+ %)</label>
+                    <input type="number" id="tolerance_plus" value="2" step="0.1" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="tolerance_minus">負公差 (- %)</label>
+                    <input type="number" id="tolerance_minus" value="1" step="0.1" min="0">
+                </div>
+            </div>
+            <div class="hint">* 範例：若目標為 70%，設定 +2% / -1% 則只會篩選出 69.00% ~ 72.00% 之間的製程</div>
+        </div>
+
+        <div class="panel" style="max-width: 600px;">
+            <h3>3. 自動釘數區間判定</h3>
+            <div class="form-group">
+                <label>外徑小於此值，預設 16 釘</label>
+                <input type="number" id="rule_low" value="8" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>外徑介於上方值至此值，預設 24 釘</label>
+                <input type="number" id="rule_mid" value="27.99" step="0.1">
+            </div>
+            <button type="button" style="background-color: #4a5568; margin-top:15px;" onclick="saveRules()">💾 儲存並套用全新規則設定</button>
+        </div>
+    </div>
+</div>
+<script>
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        if(tabId === 'calc-tab') { updateToleranceHint(); }
+    }
+
+    function updateToleranceHint() {
+        const target = parseFloat(document.getElementById('target_rate').value) || 0;
+        const plus = parseFloat(document.getElementById('tolerance_plus').value) || 0;
+        const minus = parseFloat(document.getElementById('tolerance_minus').value) || 0;
+        const minRate = (target - minus).toFixed(2);
+        const maxRate = (target + plus).toFixed(2);
+        document.getElementById('tolerance-hint').innerText = `當前篩選區間：${minRate}% ~ ${maxRate}% (依設定頁規則)`;
+    }
+
+    document.getElementById('target_rate').addEventListener('input', updateToleranceHint);
+
+    function excelBraidCore(d, n, m, mesh, D) {
+        const d_inch = d / 25.4;
+        const D_inch = D / 25.4;
+        const inner = (2 * Math.PI * (D_inch + (2 * d_inch)) * mesh) / m;
+        const F2012_rad = Math.atan(inner);
+        const angle_deg = F2012_rad * 180 / Math.PI;
+        const F2011_p = (n * d_inch * mesh) / Math.sin(F2012_rad);
+        const F2014_rate = ((2 * F2011_p) - (F2011_p * F2011_p)) * 100;
+        return { rate: F2014_rate, angle: angle_deg };
+    }
+
+    function calculateBraid() {
+        const d = parseFloat(document.getElementById('C2010').value) || 0;
+        const n = parseInt(document.getElementById('C2011').value) || 0;
+        const m = parseInt(document.getElementById('C2012').value) || 16;
+        const mesh = parseFloat(document.getElementById('C2013').value) || 0;
+        const D = parseFloat(document.getElementById('H2012').value) || 0;
+
+        if(d <= 0 || n <= 0 || m <= 0 || mesh <= 0 || D <= 0) {
+            document.getElementById('F2014').innerText = "0.00%";
+            return;
+        }
+
+        const res = excelBraidCore(d, n, m, mesh, D);
+        if (isNaN(res.rate) || res.rate < 0) {
+            document.getElementById('F2014').innerText = "超出計算範圍";
+        } else {
+            document.getElementById('F2014').innerText = res.rate.toFixed(2) + "%";
+            document.getElementById('angle-hint').innerText = "編織角度：" + res.angle.toFixed(2) + "°";
+        }
+    }
+
+    function onOdChange() {
+        const D = parseFloat(document.getElementById('H2012').value) || 0;
+        const rule_low = parseFloat(document.getElementById('rule_low').value) || 8;
+        const rule_mid = parseFloat(document.getElementById('rule_mid').value) || 28;
+        
+        let autoPin = 16;
+        if (D < rule_low) { autoPin = 16; } 
+        else if (D >= rule_low && D < rule_mid) { autoPin = 24; } 
+        else if (D >= rule_mid) { autoPin = 48; }
+
+        document.getElementById('C2012').value = autoPin;
+        document.getElementById('od-hint').innerText = `目前外徑 ${D} mm，系統已自動預設配對為：${autoPin} 釘`;
+        calculateBraid();
+    }
+
+    function saveRules() {
+        onOdChange();
+        updateToleranceHint();
+        alert("所有自訂規則與公差設定已成功儲存並同步！");
+        switchTab('calc-tab');
+    }
+
+    // 💡 智慧推薦核心再進化：導入「條數/目數極似度」演算法與極端結構硬性過濾
+    function recommendStructure() {
+        const D = parseFloat(document.getElementById('H2012').value) || 0;
+        const d = parseFloat(document.getElementById('C2010').value) || 0;
+        const m = parseInt(document.getElementById('C2012').value) || 16;
+        const target = parseFloat(document.getElementById('target_rate').value) || 70;
+
+        const maxThreads = parseInt(document.getElementById('max_threads').value) || 10;
+        const tolerancePlus = parseFloat(document.getElementById('tolerance_plus').value) || 2;
+        const toleranceMinus = parseFloat(document.getElementById('tolerance_minus').value) || 1;
+
+        const minAcceptableRate = target - toleranceMinus;
+        const maxAcceptableRate = target + tolerancePlus;
+
+        if (D <= 0 || d <= 0) {
+            alert("請先輸入正確的編織前外徑與線徑！");
+            return;
+        }
+
+        const tbody = document.getElementById('recommend-body');
+        tbody.innerHTML = "";
+
+        let validResults = [];
+        
+        // 擴大背景測試範圍至 35 目，全面進行篩選
+        for (let test_n = 3; test_n <= maxThreads; test_n++) {
+            for (let test_mesh = 4; test_mesh <= 35; test_mesh++) {
+                
+                // 🛑 硬性技術限制過濾：如果「條數」與「目數」差距超過 6 以上（例如 4條22目，差18），這在產線上結構太不穩定，直接排除
+                const threadMeshDiff = Math.abs(test_n - test_mesh);
+                if (threadMeshDiff > 6) continue;
+
+                const res = excelBraidCore(d, test_n, m, test_mesh, D);
+                
+                if (!isNaN(res.rate) && res.rate >= minAcceptableRate && res.rate <= maxAcceptableRate) {
+                    // 計算偏離目標編織率的差距
+                    const rateDiff = Math.abs(res.rate - target);
+                    
+                    // 核心排序綜分演算法：結合「編織率準確度」與「結構均勻度」
+                    // 條數與目數差距越小，綜合評分（分數越低越好）越佔優勢
+                    const totalScore = rateDiff + (threadMeshDiff * 0.15);
+
+                    validResults.push({ 
+                        n: test_n, 
+                        mesh: test_mesh, 
+                        rate: res.rate, 
+                        diff: threadMeshDiff,
+                        score: totalScore 
+                    });
+                }
+            }
+        }
+
+        // 依據「最均勻、且編織率最接近」的綜合分數進行排序
+        validResults.sort((a, b) => a.score - b.score);
+        const displayResults = validResults.slice(0, 10);
+
+        if (displayResults.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="color:#e53e3e; padding:20px; font-weight:bold;">
+                ⚠️ 在目前的限制下找不到符合規格！<br>
+                <span style="font-size:12px; color:#718096; font-weight:normal;">
+                提示：目前要求條數 ≤ ${maxThreads} 且與目數差距不可超過 6。請嘗試前往設定分頁，放寬公差或條數上限。
+                </span>
+            </td></tr>`;
+            return;
+        }
+
+        displayResults.forEach(item => {
+            const tr = document.createElement('tr');
+            // 動態標註均勻度狀態
+            let qualityTag = "⚡ 完美正方交叉";
+            let tagColor = "#2f855a";
+            if (item.diff > 0 && item.diff <= 2) { qualityTag = "🟢 結構極佳"; tagColor = "#3182ce"; }
+            else if (item.diff > 2 && item.diff <= 4) { qualityTag = "🟡 結構尚可"; tagColor = "#dd6b20"; }
+            else if (item.diff > 4) { qualityTag = "🟠 結構略偏"; tagColor = "#e53e3e"; }
+
+            tr.innerHTML = `
+                <td><strong>${item.n}</strong> 條</td>
+                <td><strong>${item.mesh}</strong> 目</td>
+                <td style="color: #2b6cb0; font-weight:bold;">${item.rate.toFixed(2)}%</td>
+                <td>
+                    <span style="color: ${tagColor}; font-weight:600; font-size:13px; display:inline-block; margin-right:8px;">${qualityTag}</span>
+                    <button type="button" style="padding:4px 10px; font-size:12px; margin:0; width:auto; float:right;" onclick="applySpec(${item.n}, ${item.mesh})">套用</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function applySpec(n, mesh) {
+        document.getElementById('C2011').value = n;
+        document.getElementById('C2013').value = mesh;
+        calculateBraid();
+    }
+
+    window.onload = function() {
+        onOdChange();
+        updateToleranceHint();
+    };
+</script>
+</body>
+</html>
