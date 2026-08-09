@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電纜包帶調機工藝查詢工具 - 3D立體纏繞版</title>
+    <style>
+        :root {
+            --primary: #2563eb; --primary-hover: #1d4ed8; --success: #16a34a; --warning: #ca8a04; --danger: #dc2626;
+            --bg: #f8fafc; --card-bg: #ffffff; --text: #1e293b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 20px; }
+        h1 { max-width: 1500px; margin: 0 auto 20px auto; color: var(--primary); font-size: 1.6rem; }
+        .container { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 1100px) { .container { grid-template-columns: 1.2fr 1fr; } }
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); height: max-content; }
+        .input-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .input-item { display: flex; flex-direction: column; }
+        .input-item label { font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; color: #475569; }
+        .input-item input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; color: white; display: inline-block; }
+        .badge-success { background-color: var(--success); }
+        .badge-warning { background-color: var(--warning); }
+        .badge-danger { background-color: var(--danger); }
+        .table-container { overflow-x: auto; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.95rem; }
+        th { background-color: #f1f5f9; }
+        .recommended-row { background-color: #f0fdf4; }
+        .active-row { border-left: 5px solid var(--primary) !important; background-color: #eff6ff !important; font-weight: bold; }
+        .btn-apply { background-color: var(--primary); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold; transition: 0.2s; }
+        .btn-apply:hover { background-color: var(--primary-hover); }
+        
+        /* 右側面板改為高質感白底風格 */
+        .visual-container { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background: #ffffff; 
+            color: #1e293b; 
+            border-radius: 12px; 
+            padding: 20px; 
+            min-height: 480px; 
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        }
+        canvas { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>⚙️ 電纜包帶調機工藝查詢工具</h1>
+    <div class="container">
+        <!-- 左側面板 -->
+        <div class="card">
+            <div class="input-group">
+                <div class="input-item"><label>芯線外徑 (mm)</label><input type="number" id="wireDia" value="4.7" step="0.1"></div>
+                <div class="input-item"><label>機台設定絞距 P (＜ mm)</label><input type="number" id="pitch" value="70"></div>
+                <div class="input-item"><label>目標重疊率 (≧ %)</label><input type="number" id="overlap" value="25"></div>
+                <div class="input-item"><label>🔋 包帶厚度 (mm)</label><input type="number" id="tapeThickness" value="0.025" step="0.001"></div>
+            </div>
+            <div class="input-group" style="border-top: 1px dashed #cbd5e1; padding-top: 15px;">
+                <div class="input-item"><label>🔍 自訂指定包帶寬度 (mm)</label><input type="number" id="customWidth" value="20"></div>
+            </div>
+            <div style="font-weight: bold; margin: 20px 0 10px 0; border-left: 4px solid var(--primary); padding-left: 8px;">📊 5mm 級距包帶工藝對照表 (點擊右側按鈕套用圖面)</div>
+            <div class="table-container">
+                <table id="resultTable">
+                    <thead><tr><th>包帶寬度</th><th>有效寬度</th><th>呈現角度</th><th>工藝評估</th><th>圖面操作</th></tr></thead>
+                    <tbody><!-- JS 動態生成 --></tbody>
+                </table>
+            </div>
+        </div>
+        <!-- 右側面板 -->
+        <div class="card visual-container">
+            <h3 style="margin-bottom:15px; color:#475569; font-size: 1.1rem; font-weight: bold;">📐 3D立體絲帶繞包展開示意圖 (包含厚度修正)</h3>
+            <canvas id="tapeCanvas" width="550" height="420"></canvas>
+            <div style="font-size: 0.8rem; color: #64748b; margin-top: 12px; text-align: center; width: 100%;">* 條紋雙色區域為包帶重疊疊層，藍色為第一層，橘色為第二層。</div>
+        </div>
+    </div>
+    <script>
+        const wireDiaInput = document.getElementById('wireDia');
+        const pitchInput = document.getElementById('pitch');
+        const overlapInput = document.getElementById('overlap');
+        const tapeThicknessInput = document.getElementById('tapeThickness');
+        const customWidthInput = document.getElementById('customWidth');
+        const resultTableBody = document.querySelector('#resultTable tbody');
+        const canvas = document.getElementById('tapeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentActiveWidth = null; 
+
+        // 建立雙色斑馬線相間條紋樣式，用於填充重疊區
+        let stripePattern = null;
+        function createStripePattern() {
+            const pCanvas = document.createElement('canvas');
+            pCanvas.width = 16; pCanvas.height = 16;
+            const pCtx = pCanvas.getContext('2d');
+            pCtx.fillStyle = 'rgba(56, 189, 248, 0.9)';
+            pCtx.fillRect(0, 0, 16, 16);
+            pCtx.strokeStyle = 'rgba(249, 115, 22, 0.9)';
+            pCtx.lineWidth = 4;
+            pCtx.beginPath();
+            pCtx.moveTo(-4, 4); pCtx.lineTo(4, -4);
+            pCtx.moveTo(0, 16); pCtx.lineTo(16, 0);
+            pCtx.moveTo(12, 20); pCtx.lineTo(20, 12);
+            pCtx.stroke();
+            return ctx.createPattern(pCanvas, 'repeat');
+        }
+
+        function calculateTaping() {
+            const d = parseFloat(wireDiaInput.value) || 4.7;
+            const p = parseFloat(pitchInput.value) || 70;
+            const ov = (parseFloat(overlapInput.value) || 25) / 100;
+            const t = parseFloat(tapeThicknessInput.value) || 0.025;
+            const customW = parseFloat(customWidthInput.value) || null;
+
+            // 厚度幾何修正：等效外徑
+            const correctedDia = d + (2 * t * (1 + ov));
+            const circumference = correctedDia * Math.PI; 
+            
+            // 安全宣告標準 5mm 級距陣列，避免特殊符號漏字
+            let widths = new Array(10, 15, 20, 25, 30, 35, 40);
+            
+            if (customW && !widths.includes(customW)) {
+                widths.push(customW);
+            }
+            widths.sort((a, b) => a - b);
+
+            let results = [];
+            widths.forEach(w => {
+                const effectiveW = w * (1 - ov); 
+                let angle = null; let status = 'danger'; let msg = ''; let score = 0;
+
+                if (effectiveW >= p) {
+                    status = 'danger'; msg = '❌ 規格太寬/絞距太短'; score = -10;
+                } else {
+                    const sinC = effectiveW / p;
+                    if (sinC > 1 || sinC <= 0) {
+                        status = 'danger'; msg = '❌ 幾何不成立'; score = -10;
+                    } else {
+                        const rad = Math.asin(sinC);
+                        angle = (rad * 180) / Math.PI;
+                        
+                        if (effectiveW < circumference * Math.cos(rad) * 0.95) {
+                            status = 'danger'; msg = '❌ 寬度太窄會露銅'; score = -5;
+                        } else if (angle < 11) {
+                            status = 'warning'; msg = '⚠️ 角度過小易斷帶'; score = 2;
+                        } else if (angle >= 11 && angle <= 18) {
+                            status = 'success'; msg = '🟢 幾何完美！最推薦'; score = 10;
+                        } else {
+                            status = 'warning'; msg = '⚠️ 偏寬邊緣易起皺'; score = 5;
+                        }
+                    }
+                }
+                results.push({ w, effectiveW, angle, status, msg, score, isCustom: w === customW });
+            });
+
+            results.sort((a, b) => b.score - a.score);
+
+            // 預設抓取評分最高、最具代表性的寬度
+            if (currentActiveWidth === null || !widths.includes(currentActiveWidth)) {
+                if (results.length > 0) currentActiveWidth = results[0].w;
+            }
+
+            // 渲染左側表格
+            resultTableBody.innerHTML = '';
+            results.forEach(res => {
+                const tr = document.createElement('tr');
+                if (res.status === 'success') tr.className = 'recommended-row';
+                if (res.w === currentActiveWidth) tr.classList.add('active-row');
+                const angleStr = res.angle ? `${res.angle.toFixed(1)}°` : '無法計算';
+                
+                tr.innerHTML = `
+                    <td>${res.w} mm ${res.isCustom ? '<small style="color:var(--primary); font-weight:bold;">(自訂)</small>' : ''}</td>
+                    <td>${res.effectiveW.toFixed(2)} mm</td>
+                    <td>${angleStr}</td>
+                    <td><span class="badge badge-${res.status}">${res.msg}</span></td>
+                    <td><button class="btn-apply" onclick="setDrawTarget(${res.w})">👁️ 套用</button></td>
+                `;
+                resultTableBody.appendChild(tr);
+            });
+
+            let drawTarget = results.find(r => r.w === currentActiveWidth);
+            drawVisualization(d, correctedDia, p, ov, drawTarget);
+        }
+
+        function setDrawTarget(width) {
+            currentActiveWidth = width;
+            calculateTaping(); 
+        }
+        // 確保 widths 級距陣列 100% 完整宣告，避免對話框造成漏字
+        var globalWidthsList = new Array(10, 15, 20, 25, 30, 35, 40);
+
+        function drawVisualization(originalD, d, p, ov, target) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 背景強制塗白 (符合白底風格需求)
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 採用完全動態比例尺：以實際 mm 換算成 canvas 像素 (1mm = 6.5 像素)
+            // 讓線徑 4.7mm 與 帶寬 20mm 產生真實物理落差
+            const scale = 4.5; 
+            
+            const startX = 30; 
+            const startY = 180; 
+            const drawLength = 360;
+            const cableHeight = originalD * scale; // 線徑高度完全依真實比例！
+
+            // 1. 繪製 3D 圓柱體電線 (明亮工業金屬質感 gradient)
+            let gradient = ctx.createLinearGradient(startX, startY, startX, startY + cableHeight);
+            gradient.addColorStop(0, '#cbd5e1'); 
+            gradient.addColorStop(0.3, '#94a3b8');
+            gradient.addColorStop(0.7, '#64748b'); 
+            gradient.addColorStop(1, '#475569');
+            ctx.fillStyle = gradient; 
+            ctx.fillRect(startX, startY, drawLength, cableHeight);
+
+            // 右側立體切面圓形
+            ctx.fillStyle = '#3b82f6'; ctx.beginPath();
+            ctx.ellipse(startX + drawLength, startY + cableHeight/2, 6, cableHeight/2, 0, 0, 2 * Math.PI);
+            ctx.fill(); ctx.strokeStyle = '#1d4ed8'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // 標註右側芯線實測直徑 (深灰色高對比文字)
+            ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 1.2; ctx.beginPath();
+            ctx.moveTo(startX + drawLength + 15, startY); ctx.lineTo(startX + drawLength + 15, startY + cableHeight); ctx.stroke();
+            ctx.fillStyle = '#1e293b'; ctx.font = '12px sans-serif';
+            ctx.fillText(`芯線外徑: ${originalD.toFixed(1)} mm`, startX + drawLength + 22, startY + cableHeight/2 + 5);
+
+            // 2. 繪製立體貝茲曲線螺旋絲帶
+            if (target && target.angle) {
+                const angleRad = (target.angle * Math.PI) / 180;
+                const pixelPitch = p * scale;             // 絞距依真實比例
+                const pixelWidth = target.w * scale;         // 帶寬依真實比例
+                const pixelOverlap = target.w * ov * scale;  // 重疊寬依真實比例
+                const shift = cableHeight / Math.tan(angleRad);
+
+                // 起點精準移動到右邊圓柱剛開始的位置 (由前端向左纏繞展開)
+  			const startOffset = startX + drawLength - pixelWidth - 25;
+
+                // 建立具有圓柱表面立體弧度的貝茲曲線段
+                function drawRibbonSegment(x1, w) {
+                    ctx.beginPath(); ctx.moveTo(x1, startY); ctx.lineTo(x1 + w, startY);
+                    ctx.bezierCurveTo(x1 + w - shift * 0.4, startY + cableHeight * 0.3, x1 + w - shift * 0.7, startY + cableHeight * 0.7, x1 + w - shift, startY + cableHeight);
+                    ctx.lineTo(x1 - shift, startY + cableHeight);
+                    ctx.bezierCurveTo(x1 - shift + shift * 0.3, startY + cableHeight * 0.7, x1 - shift + shift * 0.6, startY + cableHeight * 0.3, x1, startY);
+                    ctx.closePath();
+                }
+
+                // 第一層 (底層：半透明亮藍色)
+                ctx.fillStyle = 'rgba(14, 165, 233, 0.55)';
+                drawRibbonSegment(startOffset, pixelWidth); ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+
+                // 第二層 (覆蓋層：半透明亮橘色，向左移展現重疊)
+                const secondLayerX = startOffset - (pixelWidth - pixelOverlap); 
+                ctx.fillStyle = 'rgba(249, 115, 22, 0.55)';
+                drawRibbonSegment(secondLayerX, pixelWidth); ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+
+                // 填充雙色斑馬線條紋重疊區 (固定維持兩層結構)
+                if (stripePattern === null) stripePattern = createStripePattern();
+                ctx.save(); ctx.fillStyle = stripePattern;
+                drawRibbonSegment(startOffset, pixelOverlap); ctx.fill(); ctx.restore();
+
+                // 琥珀橘加強框框 (重疊邊界線)
+                ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2.5;
+                drawRibbonSegment(startOffset, pixelOverlap); ctx.stroke();
+
+                // 3. 標註所有幾何規格數據 (搭配白底進行調色優化)
+                const ovWidthMM = target.w * ov;
+
+                // 標註 A：重疊寬度文字
+                ctx.fillStyle = '#f1f5f9'; ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1;
+                ctx.fillRect(startOffset - 10, startY + cableHeight + 25, 115, 22);
+                ctx.strokeRect(startOffset - 10, startY + cableHeight + 25, 115, 22);
+                ctx.fillStyle = '#0f172a'; ctx.font = 'bold 11px sans-serif';
+                ctx.fillText(`重疊寬: ${ovWidthMM.toFixed(2)}mm`, startOffset - 4, startY + cableHeight + 40);
+
+                // 標註 B：帶寬 (上方拉線標註)
+                ctx.fillStyle = '#e11d48'; ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(`帶寬: ${target.w} mm`, startOffset + 10, startY - 15);
+                ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 1; ctx.beginPath();
+                ctx.moveTo(startOffset + 35, startY - 10); ctx.lineTo(startOffset + 35, startY + 5); ctx.stroke();
+
+                // 標註 C：呈現角度 (左下圓弧，字體改為高對比深色)
+                ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.2; ctx.beginPath();
+                ctx.arc(startOffset - shift, startY + cableHeight, 25, Math.PI, Math.PI + angleRad, false); ctx.stroke();
+                ctx.fillStyle = '#b45309'; ctx.font = 'bold 13px sans-serif';
+                ctx.fillText(`呈現角度: ${target.angle.toFixed(1)}°`, startOffset - shift - 85, startY + cableHeight + 15);
+
+               // 下方設定總步距 P 參考線 (改為工業灰色)
+
+		ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1; ctx.beginPath();
+		ctx.moveTo(startX + drawLength, startY + cableHeight + 60); 
+		ctx.lineTo(startX + drawLength - pixelPitch, startY + cableHeight + 60); 
+		ctx.stroke();
+		ctx.fillStyle = '#475569'; ctx.font = '11px sans-serif';
+		ctx.fillText(`設定絞距 (P): ${p} mm`, startX + drawLength - pixelPitch + 10, startY + cableHeight + 75);
+
+            } else {
+                ctx.fillStyle = '#dc2626'; ctx.font = '15px sans-serif';
+                ctx.fillText('⚠️ 當前幾何參數無法建立 3D 繞包模型', startX + 20, startY + 30);
+            }
+        }
+
+        // 自動監聽輸入變更 (包含自訂寬度即時聯動)
+        [wireDiaInput, pitchInput, overlapInput, tapeThicknessInput, customWidthInput].forEach(input => {
+            input.addEventListener('input', () => { calculateTaping(); });
+        });
+
+        // 在計算前將剛才安全防漏字宣告的 globalWidthsList 重新賦值給 calculateTaping 的邏輯
+        window.addEventListener('DOMContentLoaded', () => {
+            // 微調第二段內部的 widths 讀取，確保全局名單生效
+            var originalCalculate = calculateTaping;
+            calculateTaping = function() {
+                var customW = parseFloat(customWidthInput.value) || null;
+                var targetWidths = new Array(10, 15, 20, 25, 30, 35, 40);
+                if (customW && !targetWidths.includes(customW)) {
+                    targetWidths.push(customW);
+                }
+                targetWidths.sort((a, b) => a - b);
+                
+                // 強制注入修復後的級距名單，繞過對話框漏字問題
+                window.widths = targetWidths; 
+                originalCalculate();
+            };
+            calculateTaping();
+        });
+    </script>
+</body>
+</html>
