@@ -178,7 +178,7 @@
             <div style="text-align: right; margin-top: 20px;"><button class="btn btn-primary" onclick="closeCalculationReport()">關閉視窗</button></div>
         </div>
     </div>
-    <script>
+     <script>
         let cableData = []; let selectedCableIndex = 0;
         let currentRange = { xMin: 0.1, xMax: 200, yMin: 0.01, yMax: 10 };
         const areaOptions = {
@@ -289,36 +289,26 @@
             currentRange = { xMin, xMax, yMin, yMax };
             updateChart();
         }
-        // 【核心大重盤手術 1】將尺寸縮放獨立開來，保證滑鼠移過去絕不拉伸變形
         function resizeCanvasAndDraw() {
             const canvas = document.getElementById('shortCircuitChart'); if (!canvas) return;
             const rect = canvas.parentElement.getBoundingClientRect();
-            
-            // 抓取高DPI解析度（Retina抗模糊晶片設定）
             const dpr = window.devicePixelRatio || 1;
-            canvas.style.width = (rect.width - 20) + 'px';
-            canvas.style.height = (rect.height - 20) + 'px';
-            
-            // 用實體像素去撐大畫布，再用 CSS 壓縮，畫面就會變得極度細緻銳利
-            canvas.width = (rect.width - 20) * dpr;
-            canvas.height = (rect.height - 20) * dpr;
-            
+            canvas.style.width = (rect.width - 20) + 'px'; canvas.style.height = (rect.height - 20) + 'px';
+            canvas.width = (rect.width - 20) * dpr; canvas.height = (rect.height - 20) * dpr;
             updateChart();
         }
 
-        // 【核心大重盤手術 2】純粹負責著色，拒絕在裡面修改任何尺寸設定
+        // 核心渲染繪圖引擎（升級版：利用智能錯位防重疊演算法，將同色文字完美拉開間距）
         function updateChart(mousePt = null) {
             const canvas = document.getElementById('shortCircuitChart'); if (!canvas) return;
             const ctx = canvas.getContext('2d');
-            
             const dpr = window.devicePixelRatio || 1;
             const w = canvas.width; const h = canvas.height;
             
             ctx.clearRect(0, 0, w, h);
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
 
-            // 依據實體高解析度比例配置留白
-            const padding = { top: 25 * dpr, right: 25 * dpr, bottom: 35 * dpr, left: 55 * dpr };
+            const padding = { top: 25 * dpr, right: 35 * dpr, bottom: 35 * dpr, left: 55 * dpr };
             const plotW = w - padding.left - padding.right;
             const plotH = h - padding.top - padding.bottom;
 
@@ -329,7 +319,7 @@
                 return padding.top + (1 - (Math.log10(val) - Math.log10(currentRange.yMin)) / (Math.log10(currentRange.yMax) - Math.log10(currentRange.yMin))) * plotH;
             }
 
-            // 繪製細緻對數格線 (X軸)
+            // 畫X軸對數格線
             let xStartDec = Math.floor(Math.log10(currentRange.xMin));
             let xEndDec = Math.ceil(Math.log10(currentRange.xMax));
             ctx.lineWidth = 0.5 * dpr;
@@ -347,7 +337,7 @@
                 }
             }
 
-            // 繪製細緻對數格線 (Y軸)
+            // 畫Y軸對數格線
             let yStartDec = Math.floor(Math.log10(currentRange.yMin));
             let yEndDec = Math.ceil(Math.log10(currentRange.yMax));
             for(let d = yStartDec; d <= yEndDec; d++) {
@@ -364,10 +354,11 @@
                 }
             }
 
-            // 緩存所有物理點用來做滑鼠追蹤
             window.renderedPoints = [];
             const filterTime = document.getElementById('label-filter-select').value;
+            let activeCables = [];
 
+            // 1. 第一步：繪製電纜連續斜率曲線
             cableData.forEach((item, index) => {
                 if (!item.visible) return;
                 ctx.beginPath(); ctx.lineWidth = ((index === selectedCableIndex) ? 3.5 : 1.5) * dpr; ctx.strokeStyle = item.color;
@@ -389,25 +380,59 @@
 
                 if (filterTime !== 'none') {
                     let tT = parseFloat(filterTime); let kaT = calculateShortCircuitCurrent(item.k, item.areaMm2, tT);
-                    let cx = getXPix(kaT); let cy = getYPix(tT);
-                    if(cx >= padding.left && cx <= w - padding.right && cy >= padding.top && cy <= h - padding.bottom) {
-                        ctx.beginPath(); ctx.arc(cx, cy, ((index === selectedCableIndex) ? 6 : 4) * dpr, 0, 2 * Math.PI);
-                        ctx.fillStyle = item.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr; ctx.stroke();
-                    }
+                    activeCables.push({ name: item.name, color: item.color, ka: kaT, time: tT, isSelected: (index === selectedCableIndex) });
                 }
             });
 
+            // 2. 第二步：動態繪製基準虛線與交點，並使用動態錯位排序法繪製「防重疊線條同色標籤」
             if (filterTime !== 'none') {
                 let tT = parseFloat(filterTime); let py = getYPix(tT);
-                ctx.strokeStyle = 'rgba(220, 53, 69, 0.6)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+                ctx.strokeStyle = 'rgba(220, 53, 69, 0.4)'; ctx.lineWidth = 1.2 * dpr; ctx.beginPath();
                 ctx.moveTo(padding.left, py); ctx.lineTo(w - padding.right, py); ctx.stroke();
+
+                // 依據電流大小由小到大排序，方便進行階梯式垂直錯位排版
+                activeCables.sort((a, b) => a.ka - b.ka);
+
+                activeCables.forEach((item, idx) => {
+                    let cx = getXPix(item.ka);
+                    if(cx >= padding.left && cx <= w - padding.right && py >= padding.top && py <= h - padding.bottom) {
+                        // 亮起線上的小圓點
+                        ctx.beginPath(); ctx.arc(cx, py, (item.isSelected ? 6 : 4) * dpr, 0, 2 * Math.PI);
+                        ctx.fillStyle = item.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr; ctx.stroke();
+
+                        // 💡 【核心重疊修復演算法】動態計算垂直階梯高度，完美拉開間距
+                        // 讓奇數行文字往上偏、偶數行文字往下偏，交錯開來就絕對不會疊在一起了！
+                        let offsetY = 0;
+                        if (activeCables.length > 1) {
+                            let mid = (activeCables.length - 1) / 2;
+                            offsetY = (idx - mid) * (14 * dpr); // 每行文字高差 14 實體像素
+                        } else {
+                            offsetY = -8 * dpr;
+                        }
+
+                        let textY = py + offsetY;
+
+                        // 繪製與線條同色的小導引橫線，加強視覺識別
+                        ctx.strokeStyle = item.color; ctx.lineWidth = 1 * dpr;
+                        ctx.beginPath();
+                        ctx.moveTo(cx, py);
+                        ctx.lineTo(cx + (10 * dpr), textY - (3 * dpr));
+                        ctx.lineTo(cx + (18 * dpr), textY - (3 * dpr));
+                        ctx.stroke();
+
+                        // 繪製與線條同色的高對比規格與精準 A 數據文字
+                        ctx.fillStyle = item.color; 
+                        ctx.font = (item.isSelected ? 'bold ' : '') + (9.5 * dpr) + 'px sans-serif'; 
+                        ctx.textAlign = 'left';
+                        ctx.fillText(`${item.name}: ${item.ka.toFixed(3)} kA`, cx + (22 * dpr), textY);
+                    }
+                });
             }
 
             ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5 * dpr; ctx.strokeRect(padding.left, padding.top, plotW, plotH);
             ctx.fillStyle = '#222'; ctx.font = 'bold ' + (11 * dpr) + 'px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText("短路電流 I (kA)", padding.left + plotW/2, h - (4 * dpr));
 
-            // 如果有滑鼠指到的點，在最上層疊加畫出交叉線與黑色精細提示框
             if (mousePt) {
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 0.6 * dpr;
                 ctx.beginPath(); ctx.moveTo(mousePt.cX, padding.top); ctx.lineTo(mousePt.cX, h - padding.bottom); ctx.stroke();
@@ -422,7 +447,6 @@
                 
                 ctx.fillStyle = 'rgba(30, 30, 30, 0.9)'; ctx.fillRect(boxX, boxY, boxW, boxH);
                 ctx.strokeStyle = mousePt.color; ctx.lineWidth = 1 * dpr; ctx.strokeRect(boxX, boxY, boxW, boxH);
-                
                 ctx.fillStyle = '#fff'; ctx.font = 'bold ' + (10 * dpr) + 'px sans-serif'; ctx.textAlign = 'left';
                 ctx.fillText(mousePt.name, boxX + (8 * dpr), boxY + (15 * dpr));
                 ctx.font = (10 * dpr) + 'px monospace';
@@ -430,26 +454,17 @@
                 ctx.fillText(`時間 t: ${mousePt.yVal.toFixed(2)} 秒`, boxX + (8 * dpr), boxY + (44 * dpr));
             }
         }
-        // 【核心大重盤手術 3】滑鼠滑過去時，僅發送座標點命令重繪提示框，網頁絕不拉伸
         function handleMouseMove(e) {
             const canvas = document.getElementById('shortCircuitChart'); if (!canvas || !window.renderedPoints) return;
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            
-            // 抓出滑鼠在 Canvas 內部對應的高解析度實體像素點
-            const mX = (e.clientX - rect.left) * dpr;
-            const mY = (e.clientY - rect.top) * dpr;
-            
+            const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
+            const mX = (e.clientX - rect.left) * dpr; const mY = (e.clientY - rect.top) * dpr;
             let closestPt = null; let minDist = 25 * dpr;
-            
             window.renderedPoints.forEach(curve => {
                 curve.points.forEach(pt => {
                     let dist = Math.sqrt((pt.cX - mX)**2 + (pt.cY - mY)**2);
                     if (dist < minDist) { minDist = dist; closestPt = { xVal: pt.xVal, yVal: pt.yVal, cX: pt.cX, cY: pt.cY, name: curve.cableName, color: curve.color }; }
                 });
             });
-
-            // 將捕獲到的點發送給繪圖板，如果沒指到任何點，就單純還原乾淨圖表
             updateChart(closestPt);
         }
 
@@ -472,9 +487,8 @@
                 txt += row.join('\t') + '\n';
             });
             const textArea = document.createElement("textarea"); textArea.value = txt;
-            document.body.appendChild(textArea); textArea.select();
-            document.execCommand('copy'); document.body.removeChild(textArea);
-            alert('📋 【純數據複製成功】請直接至 Excel 貼上 (Ctrl+V)。');
+            document.body.appendChild(textArea); textArea.select(); document.execCommand('copy'); document.body.removeChild(textArea);
+            alert('📋 【純數據複製成功】已拷貝至剪貼簿！');
         }
 
         function showCalculationReport() {
@@ -489,6 +503,21 @@
                     容許短路熱極限電流 = <span style="font-weight:bold;color:var(--danger-color);">${(item.k * item.areaMm2 / 1000).toFixed(3)} kA</span>
                 </div>
             `;
+
+            const prevBtn = document.getElementById('btn-prev-cable'); const nextBtn = document.getElementById('btn-next-cable');
+            if (prevBtn && nextBtn) {
+                prevBtn.style.backgroundColor = (selectedCableIndex <= 0) ? '#f5f5f5' : '#eee';
+                prevBtn.style.color = (selectedCableIndex <= 0) ? '#ccc' : '#333';
+                prevBtn.style.cursor = (selectedCableIndex <= 0) ? 'not-allowed' : 'pointer';
+                prevBtn.onmouseover = function() { if(selectedCableIndex > 0) this.style.backgroundColor = '#e6f4ff'; };
+                prevBtn.onmouseout = function() { this.style.backgroundColor = (selectedCableIndex <= 0) ? '#f5f5f5' : '#eee'; };
+
+                nextBtn.style.backgroundColor = (selectedCableIndex >= cableData.length - 1) ? '#f5f5f5' : '#eee';
+                nextBtn.style.color = (selectedCableIndex >= cableData.length - 1) ? '#ccc' : '#333';
+                nextBtn.style.cursor = (selectedCableIndex >= cableData.length - 1) ? 'not-allowed' : 'pointer';
+                nextBtn.onmouseover = function() { if(selectedCableIndex < cableData.length - 1) this.style.backgroundColor = '#e6f4ff'; };
+                nextBtn.onmouseout = function() { this.style.backgroundColor = (selectedCableIndex >= cableData.length - 1) ? '#f5f5f5' : '#eee'; };
+            }
             document.getElementById('formula-modal').style.display = 'flex';
         }
 
@@ -502,7 +531,27 @@
 
         function downloadChartImage() {
             const cvs = document.getElementById('shortCircuitChart'); if (!cvs) return;
-            const a = document.createElement('a'); a.download = '原生短路電流評估報告.png'; a.href = cvs.toDataURL('image/png'); a.click();
+            const dpr = window.devicePixelRatio || 1;
+            const exp = document.createElement('canvas'); const ctx = exp.getContext('2d');
+            exp.width = cvs.width; exp.height = cvs.height + (90 * dpr);
+            
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, exp.width, exp.height);
+            ctx.drawImage(cvs, 0, 0);
+            
+            ctx.fillStyle = '#222222'; ctx.font = 'bold ' + (11 * dpr) + 'px sans-serif';
+            ctx.fillText('📋 出口電纜短路規格對照表（顏色說明）：', 25 * dpr, cvs.height + (25 * dpr));
+            
+            let cx = 25 * dpr; let cy = cvs.height + (45 * dpr);
+            cableData.forEach(item => {
+                if (!item.visible) return;
+                ctx.fillStyle = item.color; ctx.fillRect(cx, cy - (9 * dpr), 12 * dpr, 12 * dpr);
+                ctx.fillStyle = '#333333'; ctx.font = (10 * dpr) + 'px sans-serif';
+                ctx.fillText(`${item.name} (k=${item.k})`, cx + (18 * dpr), cy);
+                cx += ctx.measureText(`${item.name} (k=${item.k})`).width + (40 * dpr);
+                if (cx > exp.width - (150 * dpr)) { cx = 25 * dpr; cy += (20 * dpr); }
+            });
+            
+            const a = document.createElement('a'); a.download = '電纜短路熱極限完整評估報告.png'; a.href = exp.toDataURL('image/png'); a.click();
         }
 
         function addDefaultExample() {
@@ -515,7 +564,6 @@
         }
 
         document.getElementById('shortCircuitChart').addEventListener('mousemove', handleMouseMove);
-        // 滑鼠離開畫布時，清除靶心十字線與提示框
         document.getElementById('shortCircuitChart').addEventListener('mouseleave', () => { updateChart(); });
         window.addEventListener('resize', resizeCanvasAndDraw);
         setTimeout(() => { updateAreaOptions(); resetColorPicker(); addDefaultExample(); }, 100);
