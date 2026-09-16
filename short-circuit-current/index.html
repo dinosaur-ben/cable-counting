@@ -178,7 +178,7 @@
             <div style="text-align: right; margin-top: 20px;"><button class="btn btn-primary" onclick="closeCalculationReport()">關閉視窗</button></div>
         </div>
     </div>
-        <script>
+    <script>
         let cableData = []; let selectedCableIndex = 0;
         let currentRange = { xMin: 0.1, xMax: 200, yMin: 0.01, yMax: 10 };
         const areaOptions = {
@@ -187,7 +187,7 @@
             mcm: [250, 300, 350, 400, 500, 600, 750, 1000, "custom"]
         };
         const awgToMm2 = { "14": 2.08, "12": 3.31, "10": 5.26, "8": 8.37, "6": 13.3, "4": 21.15, "2": 33.62, "1": 42.41, "1/0": 53.49, "2/0": 67.43, "3/0": 85.01, "4/0": 107.2 };
-        const defaultColors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#008080'];
+        const defaultColors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080'];
         let colorIndex = 0;
 
         function resetColorPicker() {
@@ -248,10 +248,9 @@
             });
             colorIndex++; resetColorPicker();
             selectedCableIndex = cableData.length - 1;
-            renderCableList(); updateChart();
+            renderCableList(); resizeCanvasAndDraw();
         }
 
-        // 【終極修復版】強制為清單著色器注入 Webkit 核心重設，徹底瓦解所有瀏覽器的壓縮扁平化限制
         function renderCableList() {
             const tbody = document.getElementById('cable-list-body'); const legendContainer = document.getElementById('custom-legend-container');
             if (!tbody || !legendContainer) return; tbody.innerHTML = ''; legendContainer.innerHTML = '';
@@ -290,22 +289,39 @@
             currentRange = { xMin, xMax, yMin, yMax };
             updateChart();
         }
-        // 精密對數比例尺渲染引擎，解決格線縮放的變形Bug
-        function updateChart() {
+        // 【核心大重盤手術 1】將尺寸縮放獨立開來，保證滑鼠移過去絕不拉伸變形
+        function resizeCanvasAndDraw() {
+            const canvas = document.getElementById('shortCircuitChart'); if (!canvas) return;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            
+            // 抓取高DPI解析度（Retina抗模糊晶片設定）
+            const dpr = window.devicePixelRatio || 1;
+            canvas.style.width = (rect.width - 20) + 'px';
+            canvas.style.height = (rect.height - 20) + 'px';
+            
+            // 用實體像素去撐大畫布，再用 CSS 壓縮，畫面就會變得極度細緻銳利
+            canvas.width = (rect.width - 20) * dpr;
+            canvas.height = (rect.height - 20) * dpr;
+            
+            updateChart();
+        }
+
+        // 【核心大重盤手術 2】純粹負責著色，拒絕在裡面修改任何尺寸設定
+        function updateChart(mousePt = null) {
             const canvas = document.getElementById('shortCircuitChart'); if (!canvas) return;
             const ctx = canvas.getContext('2d');
             
-            const rect = canvas.parentElement.getBoundingClientRect();
-            canvas.width = rect.width - 20; canvas.height = rect.height - 20;
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width; const h = canvas.height;
             
-            const padding = { top: 30, right: 30, bottom: 40, left: 50 };
-            const plotW = canvas.width - padding.left - padding.right;
-            const plotH = canvas.height - padding.top - padding.bottom;
-            
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
 
-            // 核心映射坐標轉換器
+            // 依據實體高解析度比例配置留白
+            const padding = { top: 25 * dpr, right: 25 * dpr, bottom: 35 * dpr, left: 55 * dpr };
+            const plotW = w - padding.left - padding.right;
+            const plotH = h - padding.top - padding.bottom;
+
             function getXPix(val) {
                 return padding.left + ((Math.log10(val) - Math.log10(currentRange.xMin)) / (Math.log10(currentRange.xMax) - Math.log10(currentRange.xMin))) * plotW;
             }
@@ -313,61 +329,58 @@
                 return padding.top + (1 - (Math.log10(val) - Math.log10(currentRange.yMin)) / (Math.log10(currentRange.yMax) - Math.log10(currentRange.yMin))) * plotH;
             }
 
-            // X軸對數格線動態變更比例尺渲染
+            // 繪製細緻對數格線 (X軸)
             let xStartDec = Math.floor(Math.log10(currentRange.xMin));
             let xEndDec = Math.ceil(Math.log10(currentRange.xMax));
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.5 * dpr;
             for(let d = xStartDec; d <= xEndDec; d++) {
                 let base = Math.pow(10, d);
                 for(let i = 1; i <= 9; i++) {
-                    let v = base * i;
-                    if(v < currentRange.xMin || v > currentRange.xMax) continue;
+                    let v = base * i; if(v < currentRange.xMin || v > currentRange.xMax) continue;
                     let px = getXPix(v);
-                    ctx.strokeStyle = (i === 1) ? '#999' : '#e8e8e8';
-                    ctx.beginPath(); ctx.moveTo(px, padding.top); ctx.lineTo(px, canvas.height - padding.bottom); ctx.stroke();
-                    if(i === 1 || (v < 1 && i === 5) || (v >= 1 && (i===2 || i===5 || i===1))) {
-                        ctx.fillStyle = '#555'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-                        ctx.fillText(v >= 1 ? v.toFixed(0) : v.toFixed(1), px, canvas.height - padding.bottom + 14);
+                    ctx.strokeStyle = (i === 1) ? '#888888' : '#e8e8e8';
+                    ctx.beginPath(); ctx.moveTo(px, padding.top); ctx.lineTo(px, h - padding.bottom); ctx.stroke();
+                    if(i === 1 || (v < 1 && i === 5) || (v >= 1 && (i===2 || i===5))) {
+                        ctx.fillStyle = '#444'; ctx.font = (10 * dpr) + 'px sans-serif'; ctx.textAlign = 'center';
+                        ctx.fillText(v >= 1 ? v.toFixed(0) : v.toFixed(1), px, h - padding.bottom + (13 * dpr));
                     }
                 }
             }
 
-            // Y軸對數格線動態變更比例尺渲染
+            // 繪製細緻對數格線 (Y軸)
             let yStartDec = Math.floor(Math.log10(currentRange.yMin));
             let yEndDec = Math.ceil(Math.log10(currentRange.yMax));
             for(let d = yStartDec; d <= yEndDec; d++) {
                 let base = Math.pow(10, d);
                 for(let i = 1; i <= 9; i++) {
-                    let v = base * i;
-                    if(v < currentRange.yMin || v > currentRange.yMax) continue;
+                    let v = base * i; if(v < currentRange.yMin || v > currentRange.yMax) continue;
                     let py = getYPix(v);
-                    ctx.strokeStyle = (i === 1) ? '#999' : '#e8e8e8';
-                    ctx.beginPath(); ctx.moveTo(padding.left, py); ctx.lineTo(canvas.width - padding.right, py); ctx.stroke();
+                    ctx.strokeStyle = (i === 1) ? '#888888' : '#e8e8e8';
+                    ctx.beginPath(); ctx.moveTo(padding.left, py); ctx.lineTo(w - padding.right, py); ctx.stroke();
                     if(i === 1 || i === 5 || v === 0.5) {
-                        ctx.fillStyle = '#555'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
-                        ctx.fillText(v >= 1 ? v.toFixed(0) : (v === 0.5 ? "0.5" : v.toFixed(2)), padding.left - 6, py + 4);
+                        ctx.fillStyle = '#444'; ctx.font = (10 * dpr) + 'px sans-serif'; ctx.textAlign = 'right';
+                        ctx.fillText(v >= 1 ? v.toFixed(0) : (v === 0.5 ? "0.5" : v.toFixed(2)), padding.left - (6 * dpr), py + (4 * dpr));
                     }
                 }
             }
 
-            // 繪製熱極限曲線與基準時間點圓圈
+            // 緩存所有物理點用來做滑鼠追蹤
+            window.renderedPoints = [];
             const filterTime = document.getElementById('label-filter-select').value;
-            window.renderedPoints = []; // 緩存所有曲線物理座標點供滑鼠雷達比對數值
 
             cableData.forEach((item, index) => {
                 if (!item.visible) return;
-                ctx.beginPath(); ctx.lineWidth = (index === selectedCableIndex) ? 3.5 : 1.8; ctx.strokeStyle = item.color;
-                let first = true;
+                ctx.beginPath(); ctx.lineWidth = ((index === selectedCableIndex) ? 3.5 : 1.5) * dpr; ctx.strokeStyle = item.color;
+                let first = true; let ptsArray = [];
                 
-                let ptsArray = [];
-                for (let i = 0; i <= 60; i++) {
-                    let ratio = i / 60;
+                for (let i = 0; i <= 80; i++) {
+                    let ratio = i / 80;
                     let logY = Math.log10(currentRange.yMin) + ratio * (Math.log10(currentRange.yMax) - Math.log10(currentRange.yMin));
                     let t = Math.pow(10, logY); let ka = calculateShortCircuitCurrent(item.k, item.areaMm2, t);
                     let px = getXPix(ka); let py = getYPix(t);
                     
                     ptsArray.push({ xVal: ka, yVal: t, cX: px, cY: py });
-                    if(px >= padding.left && px <= canvas.width - padding.right) {
+                    if(px >= padding.left && px <= w - padding.right) {
                         if (first) { ctx.moveTo(px, py); first = false; } else { ctx.lineTo(px, py); }
                     }
                 }
@@ -377,70 +390,67 @@
                 if (filterTime !== 'none') {
                     let tT = parseFloat(filterTime); let kaT = calculateShortCircuitCurrent(item.k, item.areaMm2, tT);
                     let cx = getXPix(kaT); let cy = getYPix(tT);
-                    if(cx >= padding.left && cx <= canvas.width - padding.right && cy >= padding.top && cy <= canvas.height - padding.bottom) {
-                        ctx.beginPath(); ctx.arc(cx, cy, (index === selectedCableIndex) ? 6 : 4, 0, 2 * Math.PI);
-                        ctx.fillStyle = item.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+                    if(cx >= padding.left && cx <= w - padding.right && cy >= padding.top && cy <= h - padding.bottom) {
+                        ctx.beginPath(); ctx.arc(cx, cy, ((index === selectedCableIndex) ? 6 : 4) * dpr, 0, 2 * Math.PI);
+                        ctx.fillStyle = item.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr; ctx.stroke();
                     }
                 }
             });
 
-            // 繪製動態特定秒數垂直基準紅線
             if (filterTime !== 'none') {
                 let tT = parseFloat(filterTime); let py = getYPix(tT);
-                ctx.strokeStyle = 'rgba(220, 53, 69, 0.7)'; ctx.lineWidth = 1.5; ctx.beginPath();
-                ctx.moveTo(padding.left, py); ctx.lineTo(canvas.width - padding.right, py); ctx.stroke();
+                ctx.strokeStyle = 'rgba(220, 53, 69, 0.6)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+                ctx.moveTo(padding.left, py); ctx.lineTo(w - padding.right, py); ctx.stroke();
             }
 
-            ctx.strokeStyle = '#333333'; ctx.lineWidth = 1.5; ctx.strokeRect(padding.left, padding.top, plotW, plotH);
-            ctx.fillStyle = '#333'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText("短路電流 I (kA)", padding.left + plotW/2, canvas.height - 4);
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5 * dpr; ctx.strokeRect(padding.left, padding.top, plotW, plotH);
+            ctx.fillStyle = '#222'; ctx.font = 'bold ' + (11 * dpr) + 'px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText("短路電流 I (kA)", padding.left + plotW/2, h - (4 * dpr));
+
+            // 如果有滑鼠指到的點，在最上層疊加畫出交叉線與黑色精細提示框
+            if (mousePt) {
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 0.6 * dpr;
+                ctx.beginPath(); ctx.moveTo(mousePt.cX, padding.top); ctx.lineTo(mousePt.cX, h - padding.bottom); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(padding.left, mousePt.cY); ctx.lineTo(w - padding.right, mousePt.cY); ctx.stroke();
+                
+                ctx.beginPath(); ctx.arc(mousePt.cX, mousePt.cY, 6 * dpr, 0, 2*Math.PI);
+                ctx.fillStyle = mousePt.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * dpr; ctx.stroke();
+
+                let boxW = 150 * dpr; let boxH = 52 * dpr;
+                let boxX = mousePt.cX + (12 * dpr); let boxY = mousePt.cY - (25 * dpr);
+                if (boxX + boxW > w) boxX = mousePt.cX - boxW - (12 * dpr);
+                
+                ctx.fillStyle = 'rgba(30, 30, 30, 0.9)'; ctx.fillRect(boxX, boxY, boxW, boxH);
+                ctx.strokeStyle = mousePt.color; ctx.lineWidth = 1 * dpr; ctx.strokeRect(boxX, boxY, boxW, boxH);
+                
+                ctx.fillStyle = '#fff'; ctx.font = 'bold ' + (10 * dpr) + 'px sans-serif'; ctx.textAlign = 'left';
+                ctx.fillText(mousePt.name, boxX + (8 * dpr), boxY + (15 * dpr));
+                ctx.font = (10 * dpr) + 'px monospace';
+                ctx.fillText(`電流 I: ${mousePt.xVal.toFixed(3)} kA`, boxX + (8 * dpr), boxY + (30 * dpr));
+                ctx.fillText(`時間 t: ${mousePt.yVal.toFixed(2)} 秒`, boxX + (8 * dpr), boxY + (44 * dpr));
+            }
         }
-        // 【核心大升級】加裝滑鼠雷達偵測機制，隨時在右側顯示提示框並與左邊表格交互變粗
+        // 【核心大重盤手術 3】滑鼠滑過去時，僅發送座標點命令重繪提示框，網頁絕不拉伸
         function handleMouseMove(e) {
             const canvas = document.getElementById('shortCircuitChart'); if (!canvas || !window.renderedPoints) return;
-            const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
-            const mX = e.clientX - rect.left; const mY = e.clientY - rect.top;
+            const dpr = window.devicePixelRatio || 1;
             
-            let closestPt = null; let minDist = 25; // 偵測滑鼠周圍 25 像素內的點
+            // 抓出滑鼠在 Canvas 內部對應的高解析度實體像素點
+            const mX = (e.clientX - rect.left) * dpr;
+            const mY = (e.clientY - rect.top) * dpr;
+            
+            let closestPt = null; let minDist = 25 * dpr;
             
             window.renderedPoints.forEach(curve => {
                 curve.points.forEach(pt => {
                     let dist = Math.sqrt((pt.cX - mX)**2 + (pt.cY - mY)**2);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        closestPt = { xVal: pt.xVal, yVal: pt.yVal, cX: pt.cX, cY: pt.cY, name: curve.cableName, color: curve.color };
-                    }
+                    if (dist < minDist) { minDist = dist; closestPt = { xVal: pt.xVal, yVal: pt.yVal, cX: pt.cX, cY: pt.cY, name: curve.cableName, color: curve.color }; }
                 });
             });
 
-            // 先重繪畫布擦掉舊的提示框
-            updateChart();
-
-            if (closestPt) {
-                // 1. 在滑鼠指到的交點上亮起交叉靶心
-                ctx.strokeStyle = '#333'; ctx.lineWidth = 0.8;
-                ctx.beginPath(); ctx.moveTo(closestPt.cX, 0); ctx.lineTo(closestPt.cX, canvas.height); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, closestPt.cY); ctx.lineTo(canvas.width, closestPt.cY); ctx.stroke();
-                
-                ctx.beginPath(); ctx.arc(closestPt.cX, closestPt.cY, 7, 0, 2*Math.PI);
-                ctx.fillStyle = closestPt.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-
-                // 2. 在滑鼠右側畫出精緻的動態數據浮動提示框 (Tooltip)
-                let boxW = 160; let boxH = 55;
-                let boxX = closestPt.cX + 12; let boxY = closestPt.cY - 25;
-                if (boxX + boxW > canvas.width) boxX = closestPt.cX - boxW - 12;
-                
-                ctx.fillStyle = 'rgba(43, 43, 43, 0.9)';
-                ctx.fillRect(boxX, boxY, boxW, boxH);
-                ctx.strokeStyle = closestPt.color; ctx.lineWidth = 1.5; ctx.strokeRect(boxX, boxY, boxW, boxH);
-                
-                ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
-                ctx.fillText(closestPt.name, boxX + 8, boxY + 16);
-                ctx.font = '10px monospace';
-                ctx.fillText(`電流 I: ${closestPt.xVal.toFixed(3)} kA`, boxX + 8, boxY + 32);
-                ctx.fillText(`時間 t: ${closestPt.yVal.toFixed(2)} 秒`, boxX + 8, boxY + 46);
-            }
+            // 將捕獲到的點發送給繪圖板，如果沒指到任何點，就單純還原乾淨圖表
+            updateChart(closestPt);
         }
 
         function copyToExcel() {
@@ -492,15 +502,7 @@
 
         function downloadChartImage() {
             const cvs = document.getElementById('shortCircuitChart'); if (!cvs) return;
-            const exp = document.createElement('canvas'); const ctx = exp.getContext('2d');
-            exp.width = cvs.width + 40; exp.height = cvs.height + 100;
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,exp.width,exp.height); ctx.drawImage(cvs, 20, 20);
-            ctx.fillStyle = '#333'; ctx.font = 'bold 11px Arial'; ctx.fillText('📋 電纜短路規格對照：', 25, cvs.height + 40);
-            let cx = 25; cableData.forEach(item => {
-                if (!item.visible) return; ctx.fillStyle = item.color; ctx.fillRect(cx, cvs.height + 55, 10, 10);
-                ctx.fillStyle = '#333'; ctx.fillText(item.name, cx + 15, cvs.height + 64); cx += 130;
-            });
-            const a = document.createElement('a'); a.download = '短路電流報告.png'; a.href = exp.toDataURL('image/png'); a.click();
+            const a = document.createElement('a'); a.download = '原生短路電流評估報告.png'; a.href = cvs.toDataURL('image/png'); a.click();
         }
 
         function addDefaultExample() {
@@ -509,12 +511,13 @@
                 { name: "60 mm² XLPE", nominalArea: 60, unit: "mm2", material: "XLPE", k: 143, temp: "90°C", areaMm2: 60, color: "#3cb44b", visible: true },
                 { name: "95 mm² XLPE", nominalArea: 95, unit: "mm2", material: "XLPE", k: 143, temp: "90°C", areaMm2: 95, color: "#4363d8", visible: true }
             ];
-            colorIndex = 3; renderCableList(); updateChart();
+            colorIndex = 3; renderCableList(); resizeCanvasAndDraw();
         }
 
-        // 綁定滑鼠移動事件進行數據追蹤
         document.getElementById('shortCircuitChart').addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('resize', updateChart);
+        // 滑鼠離開畫布時，清除靶心十字線與提示框
+        document.getElementById('shortCircuitChart').addEventListener('mouseleave', () => { updateChart(); });
+        window.addEventListener('resize', resizeCanvasAndDraw);
         setTimeout(() => { updateAreaOptions(); resetColorPicker(); addDefaultExample(); }, 100);
     </script>
 </body>
