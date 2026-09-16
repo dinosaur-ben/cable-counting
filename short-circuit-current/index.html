@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>電纜短路熱極限評估與保護協調工具</title>
-    <!-- 引入標準且全台連線最快的微軟/Cloudflare 官方 Chart.js 繪圖套件網址 -->
+    
+    <!-- 【關鍵修復】引入正確且全台連線最快的 Chart.js 官方繪圖套件 -->
     <script src="https://cloudflare.com"></script>
+    
     <style>
         :root {
             --primary-color: #2b2b2b; --secondary-color: #4a4a4a; --bg-color: #f8f9fa;
@@ -142,8 +144,7 @@
                     <button class="btn btn-secondary" onclick="showCalculationReport()">ℹ️ 顯示計算公式</button>
                 </div>
             </div>
-        </div> <!-- 【核心修正：補上此行閉合標籤，將左側面板與右側面板完美切開】 -->
-
+        </div> <!-- 切開左右大面板閉合標籤 -->
         <!-- 【右半邊：專業雙對數圖表與互動面板】 -->
         <div class="right-panel">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #f0f0f0; padding: 10px; border-radius: 4px;">
@@ -176,6 +177,7 @@
         </div>
     </div> <!-- 左右大外框閉合 -->
     
+    <!-- 隱藏的計算公式彈出視窗 -->
     <div id="formula-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
         <div style="background: #ffffff; width: 80%; max-width: 650px; border-radius: 6px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; max-height: 85vh; overflow-y: auto;">
             <span onclick="closeCalculationReport()" style="position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; font-weight: bold; color: #999;">&times;</span>
@@ -184,23 +186,6 @@
                 <h2 id="modal-title" style="border:none; margin:0; padding:0;">IEC 計算書</h2>
                 <button id="btn-next-cable" class="arrow-btn" onclick="switchFormulaCable(1)">後一條 ＞</button>
             </div>
-            <div id="modal-content" style="font-size: 0.95rem; line-height: 1.6; color: #333;"></div>
-            <div style="text-align: right; margin-top: 20px;"><button class="btn btn-primary" onclick="closeCalculationReport()">關閉視窗</button></div>
-        </div>
-    </div>
-
-    <!-- 隱藏的計算公式彈出視窗 (Modal 升級加裝左右箭頭切換鈕) -->
-    <div id="formula-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div style="background: #ffffff; width: 80%; max-width: 650px; border-radius: 6px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; max-height: 85vh; overflow-y: auto;">
-            <span onclick="closeCalculationReport()" style="position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; font-weight: bold; color: #999;">&times;</span>
-            
-            <!-- 【核心修正】加入左右切換箭頭包裝器 -->
-            <div class="modal-header-container">
-                <button id="btn-prev-cable" class="arrow-btn" onclick="switchFormulaCable(-1)">＜ 前一條</button>
-                <h2 id="modal-title" style="border:none; margin:0; padding:0;">IEC 計算書</h2>
-                <button id="btn-next-cable" class="arrow-btn" onclick="switchFormulaCable(1)">後一條 ＞</button>
-            </div>
-            
             <div id="modal-content" style="font-size: 0.95rem; line-height: 1.6; color: #333;"></div>
             <div style="text-align: right; margin-top: 20px;"><button class="btn btn-primary" onclick="closeCalculationReport()">關閉視窗</button></div>
         </div>
@@ -246,72 +231,65 @@
             if (s === 'custom') {
                 const cv = parseFloat(document.getElementById('custom-area-input').value);
                 if (isNaN(cv) || cv <= 0) { alert('請輸入正確的截面積！'); return; }
-                nominalArea = cv; actualAreaMm2 = u === 'mm2' ? cv : (u === 'mcm' ? cv * 0.5067 : cv);
-                areaLabel = cv + (u === 'mm2' ? ' mm²' : (u === 'mcm' ? ' MCM' : ' AWG'));
+                nominalArea = cv; actualAreaMm2 = u === 'mm2' ? cv : (u === 'mcm' ? cv * 0.5067 : cv); 
+                areaLabel = cv + ' ' + u;
             } else {
-                if (u === 'mm2') { nominalArea = actualAreaMm2 = parseFloat(s); areaLabel = s + ' mm²'; }
-                else if (u === 'awg') { nominalArea = s; actualAreaMm2 = awgToMm2[s]; areaLabel = s + ' AWG'; }
-                else { nominalArea = parseFloat(s); actualAreaMm2 = nominalArea * 0.5067; areaLabel = s + ' MCM'; }
+                nominalArea = s;
+                if (u === 'mm2') { actualAreaMm2 = parseFloat(s); areaLabel = s + ' mm²'; }
+                else if (u === 'awg') { actualAreaMm2 = awgToMm2[s]; areaLabel = s + ' AWG'; }
+                else if (u === 'mcm') { actualAreaMm2 = parseFloat(s) * 0.5067; areaLabel = s + ' MCM'; }
             }
 
-            let matName = '', kValue = 0, tempRange = '';
-            if (m === 'custom') {
-                matName = document.getElementById('custom-name-input').value.trim(); kValue = parseFloat(document.getElementById('custom-k-input').value);
-                tempRange = document.getElementById('custom-temp-input').value.trim() + '°C';
-                if (!matName || isNaN(kValue)) { alert('請完整填寫自訂材料資料！'); return; }
-            } else {
-                switch(m) {
-                    case 'xlpe': matName = 'XLPE'; kValue = 143; tempRange = '90°C→250°C'; break;
-                    case 'lsfh-xlpe': matName = 'LSFH(交連)'; kValue = 143; tempRange = '90°C→250°C'; break;
-                    case 'lsfh-pvc': matName = 'LSFH(熱塑)'; kValue = 115; tempRange = '70°C→160°C'; break;
-                    case 'pvc': matName = 'PVC'; kValue = actualAreaMm2 > 300 ? 103 : 115; tempRange = actualAreaMm2 > 300 ? '70°C→140°C' : '70°C→160°C'; break;
-                    case 'epr': matName = 'EPR'; kValue = 143; tempRange = '90°C→250°C'; break;
-                    case 'bare': matName = '裸銅線'; kValue = 176; tempRange = '30°C→250°C'; break;
-                }
+            let matName = '', kValue = 0, tempLabel = '';
+            if (m === 'xlpe') { matName = 'XLPE'; kValue = 143; tempLabel = '90°C/250°C'; }
+            else if (m === 'lsfh-xlpe') { matName = 'LSFH(交連)'; kValue = 143; tempLabel = '90°C/250°C'; }
+            else if (m === 'lsfh-pvc') { matName = 'LSFH(熱塑)'; kValue = 115; tempLabel = '70°C/160°C'; }
+            else if (m === 'pvc') { matName = 'PVC'; kValue = 115; tempLabel = '70°C/160°C'; }
+            else if (m === 'epr') { matName = 'EPR'; kValue = 130; tempLabel = '90°C/250°C'; }
+            else if (m === 'bare') { matName = '裸銅線'; kValue = 176; tempLabel = '30°C/200°C'; }
+            else if (m === 'custom') {
+                matName = document.getElementById('custom-name-input').value || '自訂材料';
+                kValue = parseFloat(document.getElementById('custom-k-input').value) || 100;
+                tempLabel = document.getElementById('custom-temp-input').value || 'N/A';
             }
 
-            cableData.push({ id: Date.now(), name: `${areaLabel} ${matName}`, nominalArea, unit: u, material: matName, k: kValue, temp: tempRange, areaMm2: actualAreaMm2, color: c, visible: true });
-            selectedCableIndex = cableData.length - 1; colorIndex++; resetColorPicker(); renderCableList(); updateChart();
+            cableData.push({
+                name: `${areaLabel} ${matName}`, nominalArea: nominalArea, unit: u, material: matName,
+                k: kValue, temp: tempLabel, areaMm2: actualAreaMm2, color: c, visible: true
+            });
+            colorIndex++; resetColorPicker();
+            selectedCableIndex = cableData.length - 1;
+            renderCableList(); updateChart();
         }
-
-        function addDefaultExample() { 
-            const s = document.getElementById('area-select'); const m = document.getElementById('material-select');
-            if (s && m) { s.value = "50"; m.value = "xlpe"; addCable(); }
-        }
-
-        // 【雙向連動大升級】點擊左側管理表格任一列，自動同步加粗並更新公式指標
         function renderCableList() {
             const tbody = document.getElementById('cable-list-body'); const legendContainer = document.getElementById('custom-legend-container');
             if (!tbody || !legendContainer) return; tbody.innerHTML = ''; legendContainer.innerHTML = '';
             cableData.forEach((item, index) => {
-                const tr = document.createElement('tr');
-                tr.style.cursor = 'pointer';
-                // 點擊橫列時（排除複選框與刪除鈕），自動設為選定焦點並同步加粗
+                const tr = document.createElement('tr'); tr.style.cursor = 'pointer';
+                if(index === selectedCableIndex) tr.style.backgroundColor = '#f1f7ff';
                 tr.onclick = (e) => {
-                    if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON') {
-                        selectedCableIndex = index;
-                        renderCableList();
+                    if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON' && e.target.type !== 'color') {
+                        selectedCableIndex = index; renderCableList(); updateChart();
                     }
                 };
                 
-                              // 【終極修復版】強制為清單著色器注入 Webkit 核心重設，徹底瓦解所有瀏覽器的壓縮扁平化限制
                 tr.innerHTML = `<td style='padding:6px;text-align:center;vertical-align:middle;'><input type='checkbox' ${item.visible?'checked':''} onchange='toggleVisibility(${index})'></td>
                                 <td style='padding:6px;vertical-align:middle;font-size:0.9rem;font-weight:${index===selectedCableIndex?'bold':'normal'};text-decoration:${index===selectedCableIndex?'underline':'none'}'>${item.name}</td>
                                 <td style='padding:6px;text-align:center;vertical-align:middle;'>
                                     <input type='color' value='${item.color}' onchange='updateCableColor(${index},this.value)' style='display:block !important; width:40px !important; height:24px !important; padding:0 !important; margin:0 auto !important; border:1px solid #999 !important; border-radius:4px !important; cursor:pointer !important; background:transparent !important; box-sizing:border-box !important; -webkit-appearance:none !important;'>
                                 </td>
                                 <td style='padding:6px;text-align:center;vertical-align:middle;'><button class='btn btn-danger' onclick='deleteCable(${index})' style='padding:2px 6px;font-size:0.75rem;'>X</button></td>`;
-
                 tbody.appendChild(tr);
                 
                 if (item.visible) {
                     const div = document.createElement('div'); div.style.display='flex'; div.style.alignItems='center'; div.style.gap='4px'; div.style.cursor='pointer';
-                    div.onclick = () => { selectedCableIndex = index; renderCableList(); showCalculationReport(); };
+                    div.onclick = () => { selectedCableIndex = index; renderCableList(); updateChart(); showCalculationReport(); };
                     div.innerHTML = `<span style='width:12px;height:12px;background:${item.color};display:inline-block;border-radius:2px;'></span><span style='${index===selectedCableIndex?'font-weight:bold;text-decoration:underline;':''}'>${item.name} (${item.temp}, k=${item.k})</span>`;
                     legendContainer.appendChild(div);
                 }
             });
         }
+        
         function toggleVisibility(index) { cableData[index].visible = !cableData[index].visible; renderCableList(); updateChart(); }
         function updateCableColor(index, color) { cableData[index].color = color; renderCableList(); updateChart(); }
         function deleteCable(index) { cableData.splice(index, 1); selectedCableIndex = Math.max(0, cableData.length - 1); renderCableList(); updateChart(); }
@@ -319,14 +297,18 @@
 
         function initChart() {
             const ctx = document.getElementById('shortCircuitChart'); if (!ctx) return;
-            if (typeof Chart !== 'undefined' && Chart.register) {
-                Chart.register(Chart.LogarithmicScale, Chart.LineController, Chart.LineElement, Chart.PointElement, Chart.LinearScale, Chart.Title, Chart.Tooltip);
-            }
             myChart = new Chart(ctx.getContext('2d'), {
                 type: 'line', data: { datasets: [] },
                 options: {
                     responsive: true, maintainAspectRatio: false, animation: false,
-                    plugins: { legend: { display: false } },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) { return context.dataset.label + ': ' + context.parsed.x.toFixed(2) + ' kA (' + context.parsed.y + ' 秒)'; }
+                            }
+                        }
+                    },
                     scales: {
                         x: { type: 'logarithmic', title: { display: true, text: '短路電流 (kA)', font:{weight:'bold'} }, min: 0.1, max: 200, grid: { color: '#e5e5e5' } },
                         y: { type: 'logarithmic', title: { display: true, text: '持續時間 (秒)', font:{weight:'bold'} }, min: 0.01, max: 10, grid: { color: '#e5e5e5' } }
@@ -335,38 +317,44 @@
             });
         }
 
-        function setChartAxisRange(xMin, xMax, yMin, yMax) { if(myChart) { myChart.options.scales.x.min = xMin; myChart.options.scales.x.max = xMax; myChart.options.scales.y.min = yMin; myChart.options.scales.y.max = yMax; myChart.update(); } }
+        function setChartAxisRange(xMin, xMax, yMin, yMax) { 
+            if(myChart) { 
+                myChart.options.scales.x.min = xMin; myChart.options.scales.x.max = xMax; 
+                myChart.options.scales.y.min = yMin; myChart.options.scales.y.max = yMax; myChart.update(); 
+            } 
+        }
 
         function updateChart() {
             if (!myChart) return; const datasets = []; const filterTime = document.getElementById('label-filter-select').value;
-            cableData.forEach((item) => {
+            cableData.forEach((item, index) => {
                 if (!item.visible) return; const pts = [];
                 const samples = [0.01, 0.02, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 10.0];
                 samples.forEach(t => { pts.push({ x: calculateShortCircuitCurrent(item.k, item.areaMm2, t), y: t }); });
-                datasets.push({ label: item.name, data: pts, borderColor: item.color, borderWidth: 2.5, pointRadius: 0, fill: false, showLine: true, tension: 0.1 });
+                
+                const isSelected = (index === selectedCableIndex);
+                datasets.push({ label: item.name, data: pts, borderColor: item.color, borderWidth: isSelected ? 4.0 : 2.0, pointRadius: 0, fill: false, showLine: true, tension: 0.1 });
 
                 if (filterTime !== 'none') {
                     const tT = parseFloat(filterTime); const kaT = calculateShortCircuitCurrent(item.k, item.areaMm2, tT);
-                    datasets.push({ label: `${item.name}標記`, data: [{ x: kaT, y: tT }], pointBackgroundColor: item.color, pointBorderColor: '#fff', pointRadius: 6, showLine: false, customTag: `${kaT.toFixed(2)} kA` });
+                    datasets.push({ 
+                        label: `${item.name} (${tT}秒)`, data: [{ x: kaT, y: tT }], 
+                        pointBackgroundColor: item.color, pointBorderColor: isSelected ? '#000' : '#fff', 
+                        pointRadius: isSelected ? 8 : 5, showLine: false 
+                    });
                 }
             });
             myChart.data.datasets = datasets; myChart.update();
         }
-
         function copyToExcel() {
             if (cableData.length === 0) { alert('清單內目前無電纜資料！'); return; }
             const timeMapping = [
-                { value: 0.01, id: "chk-001", label: "0.01秒電流(kA)" },
-                { value: 0.10, id: "chk-01",  label: "0.10秒電流(kA)" },
-                { value: 0.30, id: "chk-03",  label: "0.30秒電流(kA)" },
-                { value: 0.50, id: "chk-05",  label: "0.50秒電流(kA)" },
-                { value: 1.00, id: "chk-10",  label: "1.00秒電流(kA)" },
-                { value: 3.00, id: "chk-30",  label: "3.00秒電流(kA)" }
+                { value: 0.01, id: "chk-001", label: "0.01秒電流(kA)" }, { value: 0.10, id: "chk-01", label: "0.10秒電流(kA)" },
+                { value: 0.30, id: "chk-03",  label: "0.30秒電流(kA)" }, { value: 0.50, id: "chk-05", label: "0.50秒電流(kA)" },
+                { value: 1.00, id: "chk-10",  label: "1.00秒電流(kA)" }, { value: 3.00, id: "chk-30", label: "3.00秒電流(kA)" }
             ];
             const actualTimes = []; const actualHeaders = [];
             timeMapping.forEach(item => {
-                const el = document.getElementById(item.id);
-                if (el && el.checked) { actualTimes.push(item.value); actualHeaders.push(item.label); }
+                const el = document.getElementById(item.id); if (el && el.checked) { actualTimes.push(item.value); actualHeaders.push(item.label); }
             });
 
             let header = ['電纜規格名稱', '導體截面積', '單位', '絕緣材質', '材料常數(K值)', '耐溫等級', ...actualHeaders];
@@ -380,73 +368,66 @@
             const textArea = document.createElement("textarea"); textArea.value = txt;
             textArea.style.position = "fixed"; textArea.style.opacity = "0"; document.body.appendChild(textArea);
             textArea.focus(); textArea.select();
-            try {
-                if (document.execCommand('copy')) { alert('📋 【純數據複製成功】已完全依據您的最新勾選打包完畢！請直接至 Excel 貼上 (Ctrl+V) 即可生成完整大表。'); }
-                else { alert('複製失敗。'); }
-            } catch (err) { alert('複製失敗。'); }
+            try { document.execCommand('copy'); alert('📋 【純數據複製成功】已依據勾選打包完畢！請直接至 Excel 貼上 (Ctrl+V)。'); } catch (err) { alert('複製失敗。'); }
             document.body.removeChild(textArea);
         }
 
-        // 【大升級：動態公式書視窗與左右箭頭防呆邏輯】
         function showCalculationReport() {
-            if (cableData.length === 0) return; 
-            const item = cableData[selectedCableIndex];
-            
-            // A. 更新公式視窗中央的文字與動態 IEC 計算內容
+            if (cableData.length === 0) return; const item = cableData[selectedCableIndex];
             document.getElementById('modal-content').innerHTML = `
                 <p>依據 <strong>IEC 60364-5-54</strong> 絕熱公式：</p>
                 <div style='background:#f4f4f4;padding:12px;text-align:center;font-weight:bold;margin:12px 0;font-size:1.1rem;font-family:monospace;'>I = (k &times; S) / &radic;t</div>
                 <p><strong>當前指定線路：</strong><span style="font-weight:bold;color:var(--accent-color);text-decoration:underline;">${item.name}</span></p>
                 <p style="margin-top:5px;"><strong>材料特性：</strong>熱特性常數 k = <strong>${item.k}</strong>，極限耐溫等級 = <strong>${item.temp}</strong></p>
-                <p><strong>換算截面積：</strong>S = <strong>${item.areaMm2.toFixed(2)} mm²</strong> (已完美換算為標準公制平方數)</p>
+                <p><strong>換算截面積：</strong>S = <strong>${item.areaMm2.toFixed(2)} mm²</strong></p>
                 <div style="background:#eef6fc; padding:10px; border-left:4px solid var(--accent-color); margin:12px 0; font-size:0.9rem;">
                     <strong>以標準故障時間 t = 1.00 秒帶入算式：</strong><br>
                     I = (${item.k} &times; ${item.areaMm2.toFixed(2)}) / &radic;1.00 = <strong>${(item.k * item.areaMm2).toFixed(0)} A</strong> = <span style="font-weight:bold;color:var(--danger-color);">${(item.k * item.areaMm2 / 1000).toFixed(3)} kA</span>
                 </div>
             `;
 
-            // B. 控制左右切換按鈕的變灰與防呆點擊鎖定
-            const prevBtn = document.getElementById('btn-prev-cable');
-            const nextBtn = document.getElementById('btn-next-cable');
-            
+            const prevBtn = document.getElementById('btn-prev-cable'); const nextBtn = document.getElementById('btn-next-cable');
             if (prevBtn && nextBtn) {
-                // 如果已經是最左邊第一條，前一條變灰色防呆
-                if (selectedCableIndex <= 0) { prevBtn.classList.add('disabled'); } 
-                else { prevBtn.classList.remove('disabled'); }
-
-                // 如果已經是最右邊最後一條，後一條變灰色防呆
-                if (selectedCableIndex >= cableData.length - 1) { nextBtn.classList.add('disabled'); } 
-                else { nextBtn.classList.remove('disabled'); }
+                if (selectedCableIndex <= 0) prevBtn.classList.add('disabled'); else prevBtn.classList.remove('disabled');
+                if (selectedCableIndex >= cableData.length - 1) nextBtn.classList.add('disabled'); else nextBtn.classList.remove('disabled');
             }
-
             document.getElementById('formula-modal').style.display = 'flex';
         }
 
-        // 【大升級：公式書專用左右切換函數】
         function switchFormulaCable(direction) {
             const newIndex = selectedCableIndex + direction;
-            // 邊界防呆：超出範圍不執行切換
             if (newIndex >= 0 && newIndex < cableData.length) {
-                selectedCableIndex = newIndex;
-                renderCableList();       // 1. 同步將左側表格與圖例該列加粗底線
-                showCalculationReport();  // 2. 即時更新公式書內部算式數值
+                selectedCableIndex = newIndex; renderCableList(); showCalculationReport();
             }
         }
-
         function closeCalculationReport() { document.getElementById('formula-modal').style.display = 'none'; }
 
         function downloadChartImage() {
-            const cvs = document.getElementById('shortCircuitChart'); const exp = document.createElement('canvas'); const ctx = exp.getContext('2d');
-            if (!cvs) return; exp.width = cvs.width + 40; exp.height = cvs.height + 140; ctx.fillStyle = '#fff'; ctx.fillRect(0,0,exp.width,exp.height);
-            ctx.drawImage(cvs, 20, 20); ctx.fillStyle = '#333'; ctx.font = 'bold 12px Arial'; ctx.fillText('📋 出口電纜短路熱極限規格對照表：', 25, cvs.height + 45);
+            const cvs = document.getElementById('shortCircuitChart'); if (!cvs) return; 
+            const exp = document.createElement('canvas'); const ctx = exp.getContext('2d');
+            exp.width = cvs.width + 40; exp.height = cvs.height + 140; 
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,exp.width,exp.height); ctx.drawImage(cvs, 20, 20); 
+            ctx.fillStyle = '#333'; ctx.font = 'bold 12px Arial'; ctx.fillText('📋 出口電纜短路熱極限規格對照表：', 25, cvs.height + 45);
+            
             let cx = 25, cy = cvs.height + 70;
             cableData.forEach(item => {
-                if (!item.visible) return; ctx.fillStyle = item.color; ctx.fillRect(cx, cy-10, 12, 12); ctx.fillStyle = '#333'; ctx.font = '11px Arial';
-                ctx.fillText(`${item.name} (k=${item.k})`, cx+18, cy); cx += ctx.measureText(`${item.name} (k=${item.k})`).width + 45;
+                if (!item.visible) return; ctx.fillStyle = item.color; ctx.fillRect(cx, cy-10, 12, 12); 
+                ctx.fillStyle = '#333'; ctx.font = '11px Arial'; ctx.fillText(`${item.name} (k=${item.k})`, cx+18, cy); 
+                cx += ctx.measureText(`${item.name} (k=${item.k})`).width + 45;
                 if (cx > exp.width - 150) { cx = 25; cy += 20; }
             });
-            ctx.fillStyle = '#777'; ctx.font = 'italic 10px Arial'; ctx.fillText('※ 本計算採用公制標稱截面積與 IEC 60364-5-54 規範。導體幾何結構引起之微幅偏差不影響防護協調評估。', 25, exp.height - 15);
-            const a = document.createElement('a'); a.download = '電纜短路報告.png'; a.href = exp.toDataURL(); a.click();
+            
+            ctx.fillStyle = '#777'; ctx.font = 'italic 10px Arial'; ctx.fillText('※ 本計算採用公制標稱截面積與 IEC 60364-5-54 規範。', 25, exp.height - 15);
+            const a = document.createElement('a'); a.download = '電纜短路報告.png'; a.href = exp.toDataURL('image/png'); a.click();
+        }
+
+        function addDefaultExample() {
+            cableData = [
+                { name: "10 mm² XLPE", nominalArea: 10, unit: "mm2", material: "XLPE", k: 143, temp: "90°C/250°C", areaMm2: 10, color: "#e6194b", visible: true },
+                { name: "100 mm² XLPE", nominalArea: 100, unit: "mm2", material: "XLPE", k: 143, temp: "90°C/250°C", areaMm2: 100, color: "#3cb44b", visible: true },
+                { name: "185 mm² XLPE", nominalArea: 185, unit: "mm2", material: "XLPE", k: 143, temp: "90°C/250°C", areaMm2: 185, color: "#ffe119", visible: true }
+            ];
+            colorIndex = 3; renderCableList(); updateChart();
         }
 
         (function() {
