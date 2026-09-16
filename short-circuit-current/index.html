@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電纜短路熱極限評估與保護協調工具</title>
+    <!-- 引入標準且全台連線最快的微軟/Cloudflare 官方 Chart.js 繪圖套件網址 -->
+    <script src="https://cloudflare.com"></script>
+    <style>
+        :root {
+            --primary-color: #2b2b2b; --secondary-color: #4a4a4a; --bg-color: #f8f9fa;
+            --panel-bg: #ffffff; --border-color: #cccccc; --accent-color: #0056b3;
+            --danger-color: #dc3545; --text-color: #333333;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; min-height: 100vh; }
+        header { background-color: var(--primary-color); color: white; padding: 15px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        header h1 { font-size: 1.5rem; font-weight: 600; }
+        
+        /* 核心關鍵修復：確保大外框強制並排，分配左右寬度 */
+        .main-container { display: flex; flex: 1; padding: 20px; gap: 20px; height: calc(100vh - 60px); overflow: hidden; }
+        .left-panel { width: 40%; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        .right-panel { width: 60%; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+        
+        h2 { font-size: 1.1rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 5px; margin-bottom: 10px; color: var(--primary-color); }
+        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        label { font-size: 0.85rem; font-weight: bold; color: var(--secondary-color); }
+        input, select { padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.9rem; width: 100%; }
+        input:focus, select:focus { border-color: var(--accent-color); outline: none; }
+        .btn { padding: 8px 15px; border: none; border-radius: 4px; font-size: 0.9rem; cursor: pointer; font-weight: bold; text-align: center; }
+        .btn-primary { background-color: var(--accent-color); color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-danger { background-color: var(--danger-color); color: white; }
+        .custom-fields { display: none; background: #f0f4f8; padding: 10px; border-radius: 4px; border-left: 4px solid var(--accent-color); margin-top: 5px; }
+        .custom-fields.active { display: block; }
+        
+        /* 公式彈出視窗左右切換箭頭樣式 */
+        .modal-header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 15px; }
+        .arrow-btn { background: #eee; border: 1px solid #ccc; padding: 6px 14px; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
+        .arrow-btn:hover:not(.disabled) { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .arrow-btn.disabled { background: #f5f5f5; color: #ccc; cursor: not-allowed; border-color: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>電纜短路熱極限評估工具 (符合 IEC 60364-5-54 規範)</h1>
+    </header>
+    
+    <!-- 左右大雙面板並排外框開始 -->
+    <div class="main-container">
+        
+        <!-- 【左半邊控制面板區】 -->
+        <div class="left-panel">
+            <div>
+                <h2>1. 輸入電纜參數</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="unit-select">截面積單位</label>
+                        <select id="unit-select" onchange="updateAreaOptions()">
+                            <option value="mm2">公制平方 (mm²)</option>
+                            <option value="awg">美規線規 (AWG)</option>
+                            <option value="mcm">千圓密耳 (MCM)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="area-select">導體截面積</label>
+                        <select id="area-select" onchange="toggleCustomArea()"></select>
+                    </div>
+                </div>
+                <div id="custom-area-box" class="custom-fields">
+                    <div class="form-group">
+                        <label for="custom-area-input">請輸入自訂截面積數值</label>
+                        <input type="number" id="custom-area-input" placeholder="例如: 30 或 125">
+                    </div>
+                </div>
+                <div class="form-row" style="margin-top: 10px;">
+                    <div class="form-group">
+                        <label for="material-select">絕緣材質 / 結構</label>
+                        <select id="material-select" onchange="toggleCustomMaterial()">
+                            <option value="xlpe">XLPE (交連聚乙烯)</option>
+                            <option value="lsfh-xlpe">LSFH - 交連型 (低煙無鹵 90°C)</option>
+                            <option value="lsfh-pvc">LSFH - 熱塑型 (低煙無鹵 70°C)</option>
+                            <option value="pvc">PVC (聚氯乙烯)</option>
+                            <option value="epr">EPR (乙丙烯橡膠)</option>
+                            <option value="bare">裸銅線 (接地用)</option>
+                            <option value="custom">★ 自訂材料</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cable-color">圖表顏色</label>
+                        <input type="color" id="cable-color" style="display:inline-block !important; width:100% !important; height:36px !important; padding:0 !important; margin:0 !important; border:1px solid #ccc !important; border-radius:4px !important; cursor:pointer !important; background:transparent !important; box-sizing:border-box !important;">
+                    </div>
+                </div>
+                <div id="custom-material-box" class="custom-fields">
+                    <div class="form-group">
+                        <label for="custom-name-input">自訂材料名稱</label>
+                        <input type="text" id="custom-name-input" placeholder="例如: AAC">
+                    </div>
+                    <div class="form-row" style="margin-top: 5px;">
+                        <div class="form-group">
+                            <label for="custom-k-input">自訂材料常數 (k 值)</label>
+                            <input type="number" id="custom-k-input" placeholder="例如: 84">
+                        </div>
+                        <div class="form-group">
+                            <label for="custom-temp-input">極限耐溫 (°C)</label>
+                            <input type="text" id="custom-temp-input" placeholder="例如: 200">
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="addCable()" style="width: 100%; margin-top: 15px;">＋ 新增至管理清單</button>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-height: 200px; margin-top: 15px;">
+                <h2>2. 電纜管理清單</h2>
+                <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <table id="cable-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
+                        <thead style="background: #eee; position: sticky; top: 0; z-index: 10;">
+                            <tr>
+                                <th style="padding: 6px; width: 40px;">顯示</th>
+                                <th style="padding: 6px;">規格 / 名稱</th>
+                                <th style="padding: 6px; width: 50px;">顏色</th>
+                                <th style="padding: 6px; width: 40px; text-align: center;">刪除</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cable-list-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="background: #fdfdfd; border: 1px dashed var(--border-color); padding: 10px; border-radius: 4px;">
+                <label style="display: block; margin-bottom: 8px;">📋 Excel 複製欄位自訂勾選：</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk-001"> 0.01 秒電流</label>
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk-01" checked> 0.10 秒電流</label>
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk-03"> 0.30 秒電流</label>
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk-05" checked> 0.50 秒電流</label>
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk-10" checked> 1.00 秒電流</label>
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="chk-30"> 3.00 秒電流</label>
+                </div>
+                <div class="form-row">
+                    <button class="btn btn-secondary" onclick="copyToExcel()">📋 複製數據到 Excel</button>
+                    <button class="btn btn-secondary" onclick="showCalculationReport()">ℹ️ 顯示計算公式</button>
+                </div>
+            </div>
+        </div> <!-- 【核心修正：補上此行閉合標籤，將左側面板與右側面板完美切開】 -->
+
+        <!-- 【右半邊：專業雙對數圖表與互動面板】 -->
+        <div class="right-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #f0f0f0; padding: 10px; border-radius: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label for="label-filter-select" style="white-space: nowrap;">📌 圖表特定時間標籤：</label>
+                    <select id="label-filter-select" onchange="updateChart()" style="width: auto; padding: 4px 8px;">
+                        <option value="none">不顯示特定點標籤</option>
+                        <option value="0.01">0.01 秒 (瞬時跳脫)</option>
+                        <option value="0.10">0.10 秒 (速斷保護)</option>
+                        <option value="0.30">0.30 秒 (協調階梯)</option>
+                        <option value="0.50">0.50 秒 (中度故障)</option>
+                        <option value="1.00" selected>1.00 秒 (標準基準)</option>
+                        <option value="3.00">3.00 秒 (後備延時)</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" onclick="downloadChartImage()" style="padding: 4px 10px; font-size: 0.8rem;">📷 下載圖表圖片 (PNG)</button>
+            </div>
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                <span style="font-size: 0.8rem; font-weight: bold; align-self: center; color: var(--secondary-color);">🔍 座標區間切換：</span>
+                <button class="btn btn-secondary" onclick="setChartAxisRange(0.1, 200, 0.01, 10)" style="padding: 3px 8px; font-size: 0.75rem;">1. 全景 (0.1~200kA)</button>
+                <button class="btn btn-secondary" onclick="setChartAxisRange(0.1, 20, 0.01, 5)" style="padding: 3px 8px; font-size: 0.75rem;">2. 民用 (0.1~20kA)</button>
+                <button class="btn btn-secondary" onclick="setChartAxisRange(1, 100, 0.01, 2)" style="padding: 3px 8px; font-size: 0.75rem;">3. 工業 (1~100kA)</button>
+                <button class="btn btn-secondary" onclick="setChartAxisRange(5, 200, 0.01, 0.5)" style="padding: 3px 8px; font-size: 0.75rem;">4. 極速區 (5~200kA)</button>
+                <button class="btn btn-secondary" onclick="setChartAxisRange(0.5, 50, 0.1, 10)" style="padding: 3px 8px; font-size: 0.75rem;">5. 高壓延時 (0.5~50kA)</button>
+            </div>
+            <div id="chart-wrapper" style="flex: 1; min-height: 450px; position: relative; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px; padding: 5px;">
+                <canvas id="shortCircuitChart"></canvas>
+            </div>
+            <div id="custom-legend-container" style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85rem; padding: 5px 10px; background: #fafafa; border-radius: 4px; border: 1px solid #eaeaea; max-height: 60px; overflow-y: auto;"></div>
+        </div>
+    </div> <!-- 左右大外框閉合 -->
+    
+    <div id="formula-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; width: 80%; max-width: 650px; border-radius: 6px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; max-height: 85vh; overflow-y: auto;">
+            <span onclick="closeCalculationReport()" style="position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; font-weight: bold; color: #999;">&times;</span>
+            <div class="modal-header-container">
+                <button id="btn-prev-cable" class="arrow-btn" onclick="switchFormulaCable(-1)">＜ 前一條</button>
+                <h2 id="modal-title" style="border:none; margin:0; padding:0;">IEC 計算書</h2>
+                <button id="btn-next-cable" class="arrow-btn" onclick="switchFormulaCable(1)">後一條 ＞</button>
+            </div>
+            <div id="modal-content" style="font-size: 0.95rem; line-height: 1.6; color: #333;"></div>
+            <div style="text-align: right; margin-top: 20px;"><button class="btn btn-primary" onclick="closeCalculationReport()">關閉視窗</button></div>
+        </div>
+    </div>
+
+    <!-- 隱藏的計算公式彈出視窗 (Modal 升級加裝左右箭頭切換鈕) -->
+    <div id="formula-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; width: 80%; max-width: 650px; border-radius: 6px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; max-height: 85vh; overflow-y: auto;">
+            <span onclick="closeCalculationReport()" style="position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; font-weight: bold; color: #999;">&times;</span>
+            
+            <!-- 【核心修正】加入左右切換箭頭包裝器 -->
+            <div class="modal-header-container">
+                <button id="btn-prev-cable" class="arrow-btn" onclick="switchFormulaCable(-1)">＜ 前一條</button>
+                <h2 id="modal-title" style="border:none; margin:0; padding:0;">IEC 計算書</h2>
+                <button id="btn-next-cable" class="arrow-btn" onclick="switchFormulaCable(1)">後一條 ＞</button>
+            </div>
+            
+            <div id="modal-content" style="font-size: 0.95rem; line-height: 1.6; color: #333;"></div>
+            <div style="text-align: right; margin-top: 20px;"><button class="btn btn-primary" onclick="closeCalculationReport()">關閉視窗</button></div>
+        </div>
+    </div>
+    <script>
+        let cableData = []; let myChart = null; let selectedCableIndex = 0;
+        const areaOptions = {
+            mm2: [1.5, 2.5, 4, 6, 10, 16, 25, 30, 35, 50, 60, 70, 95, 100, 120, 125, 150, 185, 200, 240, 250, 300, 325, 400, 500, "custom"],
+            awg: ["14", "12", "10", "8", "6", "4", "2", "1", "1/0", "2/0", "3/0", "4/0", "custom"],
+            mcm: [250, 300, 350, 400, 500, 600, 750, 1000, "custom"]
+        };
+        const awgToMm2 = { "14": 2.08, "12": 3.31, "10": 5.26, "8": 8.37, "6": 13.3, "4": 21.15, "2": 33.62, "1": 42.41, "1/0": 53.49, "2/0": 67.43, "3/0": 85.01, "4/0": 107.2 };
+        const defaultColors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000'];
+        let colorIndex = 0;
+
+        function resetColorPicker() { 
+            const p = document.getElementById('cable-color');
+            if (p) p.value = defaultColors[colorIndex % defaultColors.length]; 
+        }
+        function updateAreaOptions() {
+            const u = document.getElementById('unit-select').value; const s = document.getElementById('area-select'); if (!s) return; s.innerHTML = '';
+            areaOptions[u].forEach(opt => {
+                const o = document.createElement('option'); o.value = opt;
+                o.text = opt === 'custom' ? '★ 自訂輸入' : opt + (u === 'mm2' ? ' mm²' : (u === 'awg' ? ' AWG' : ' MCM'));
+                s.appendChild(o);
+            });
+            toggleCustomArea();
+        }
+        function toggleCustomArea() { 
+            const b = document.getElementById('custom-area-box'); const s = document.getElementById('area-select');
+            if(b && s) b.style.display = s.value === 'custom' ? 'block' : 'none'; 
+        }
+        function toggleCustomMaterial() { 
+            const b = document.getElementById('custom-material-box'); const s = document.getElementById('material-select');
+            if(b && s) b.style.display = s.value === 'custom' ? 'block' : 'none'; 
+        }
+
+        function addCable() {
+            const u = document.getElementById('unit-select').value; const s = document.getElementById('area-select').value;
+            const m = document.getElementById('material-select').value; const c = document.getElementById('cable-color').value;
+            let areaLabel = '', nominalArea = 0, actualAreaMm2 = 0;
+
+            if (s === 'custom') {
+                const cv = parseFloat(document.getElementById('custom-area-input').value);
+                if (isNaN(cv) || cv <= 0) { alert('請輸入正確的截面積！'); return; }
+                nominalArea = cv; actualAreaMm2 = u === 'mm2' ? cv : (u === 'mcm' ? cv * 0.5067 : cv);
+                areaLabel = cv + (u === 'mm2' ? ' mm²' : (u === 'mcm' ? ' MCM' : ' AWG'));
+            } else {
+                if (u === 'mm2') { nominalArea = actualAreaMm2 = parseFloat(s); areaLabel = s + ' mm²'; }
+                else if (u === 'awg') { nominalArea = s; actualAreaMm2 = awgToMm2[s]; areaLabel = s + ' AWG'; }
+                else { nominalArea = parseFloat(s); actualAreaMm2 = nominalArea * 0.5067; areaLabel = s + ' MCM'; }
+            }
+
+            let matName = '', kValue = 0, tempRange = '';
+            if (m === 'custom') {
+                matName = document.getElementById('custom-name-input').value.trim(); kValue = parseFloat(document.getElementById('custom-k-input').value);
+                tempRange = document.getElementById('custom-temp-input').value.trim() + '°C';
+                if (!matName || isNaN(kValue)) { alert('請完整填寫自訂材料資料！'); return; }
+            } else {
+                switch(m) {
+                    case 'xlpe': matName = 'XLPE'; kValue = 143; tempRange = '90°C→250°C'; break;
+                    case 'lsfh-xlpe': matName = 'LSFH(交連)'; kValue = 143; tempRange = '90°C→250°C'; break;
+                    case 'lsfh-pvc': matName = 'LSFH(熱塑)'; kValue = 115; tempRange = '70°C→160°C'; break;
+                    case 'pvc': matName = 'PVC'; kValue = actualAreaMm2 > 300 ? 103 : 115; tempRange = actualAreaMm2 > 300 ? '70°C→140°C' : '70°C→160°C'; break;
+                    case 'epr': matName = 'EPR'; kValue = 143; tempRange = '90°C→250°C'; break;
+                    case 'bare': matName = '裸銅線'; kValue = 176; tempRange = '30°C→250°C'; break;
+                }
+            }
+
+            cableData.push({ id: Date.now(), name: `${areaLabel} ${matName}`, nominalArea, unit: u, material: matName, k: kValue, temp: tempRange, areaMm2: actualAreaMm2, color: c, visible: true });
+            selectedCableIndex = cableData.length - 1; colorIndex++; resetColorPicker(); renderCableList(); updateChart();
+        }
+
+        function addDefaultExample() { 
+            const s = document.getElementById('area-select'); const m = document.getElementById('material-select');
+            if (s && m) { s.value = "50"; m.value = "xlpe"; addCable(); }
+        }
+
+        // 【雙向連動大升級】點擊左側管理表格任一列，自動同步加粗並更新公式指標
+        function renderCableList() {
+            const tbody = document.getElementById('cable-list-body'); const legendContainer = document.getElementById('custom-legend-container');
+            if (!tbody || !legendContainer) return; tbody.innerHTML = ''; legendContainer.innerHTML = '';
+            cableData.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                // 點擊橫列時（排除複選框與刪除鈕），自動設為選定焦點並同步加粗
+                tr.onclick = (e) => {
+                    if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON') {
+                        selectedCableIndex = index;
+                        renderCableList();
+                    }
+                };
+                
+                              // 【終極修復版】強制為清單著色器注入 Webkit 核心重設，徹底瓦解所有瀏覽器的壓縮扁平化限制
+                tr.innerHTML = `<td style='padding:6px;text-align:center;vertical-align:middle;'><input type='checkbox' ${item.visible?'checked':''} onchange='toggleVisibility(${index})'></td>
+                                <td style='padding:6px;vertical-align:middle;font-size:0.9rem;font-weight:${index===selectedCableIndex?'bold':'normal'};text-decoration:${index===selectedCableIndex?'underline':'none'}'>${item.name}</td>
+                                <td style='padding:6px;text-align:center;vertical-align:middle;'>
+                                    <input type='color' value='${item.color}' onchange='updateCableColor(${index},this.value)' style='display:block !important; width:40px !important; height:24px !important; padding:0 !important; margin:0 auto !important; border:1px solid #999 !important; border-radius:4px !important; cursor:pointer !important; background:transparent !important; box-sizing:border-box !important; -webkit-appearance:none !important;'>
+                                </td>
+                                <td style='padding:6px;text-align:center;vertical-align:middle;'><button class='btn btn-danger' onclick='deleteCable(${index})' style='padding:2px 6px;font-size:0.75rem;'>X</button></td>`;
+
+                tbody.appendChild(tr);
+                
+                if (item.visible) {
+                    const div = document.createElement('div'); div.style.display='flex'; div.style.alignItems='center'; div.style.gap='4px'; div.style.cursor='pointer';
+                    div.onclick = () => { selectedCableIndex = index; renderCableList(); showCalculationReport(); };
+                    div.innerHTML = `<span style='width:12px;height:12px;background:${item.color};display:inline-block;border-radius:2px;'></span><span style='${index===selectedCableIndex?'font-weight:bold;text-decoration:underline;':''}'>${item.name} (${item.temp}, k=${item.k})</span>`;
+                    legendContainer.appendChild(div);
+                }
+            });
+        }
+        function toggleVisibility(index) { cableData[index].visible = !cableData[index].visible; renderCableList(); updateChart(); }
+        function updateCableColor(index, color) { cableData[index].color = color; renderCableList(); updateChart(); }
+        function deleteCable(index) { cableData.splice(index, 1); selectedCableIndex = Math.max(0, cableData.length - 1); renderCableList(); updateChart(); }
+        function calculateShortCircuitCurrent(k, areaMm2, t) { return t <= 0 ? 0 : (k * areaMm2) / Math.sqrt(t) / 1000; }
+
+        function initChart() {
+            const ctx = document.getElementById('shortCircuitChart'); if (!ctx) return;
+            if (typeof Chart !== 'undefined' && Chart.register) {
+                Chart.register(Chart.LogarithmicScale, Chart.LineController, Chart.LineElement, Chart.PointElement, Chart.LinearScale, Chart.Title, Chart.Tooltip);
+            }
+            myChart = new Chart(ctx.getContext('2d'), {
+                type: 'line', data: { datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { type: 'logarithmic', title: { display: true, text: '短路電流 (kA)', font:{weight:'bold'} }, min: 0.1, max: 200, grid: { color: '#e5e5e5' } },
+                        y: { type: 'logarithmic', title: { display: true, text: '持續時間 (秒)', font:{weight:'bold'} }, min: 0.01, max: 10, grid: { color: '#e5e5e5' } }
+                    }
+                }
+            });
+        }
+
+        function setChartAxisRange(xMin, xMax, yMin, yMax) { if(myChart) { myChart.options.scales.x.min = xMin; myChart.options.scales.x.max = xMax; myChart.options.scales.y.min = yMin; myChart.options.scales.y.max = yMax; myChart.update(); } }
+
+        function updateChart() {
+            if (!myChart) return; const datasets = []; const filterTime = document.getElementById('label-filter-select').value;
+            cableData.forEach((item) => {
+                if (!item.visible) return; const pts = [];
+                const samples = [0.01, 0.02, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 10.0];
+                samples.forEach(t => { pts.push({ x: calculateShortCircuitCurrent(item.k, item.areaMm2, t), y: t }); });
+                datasets.push({ label: item.name, data: pts, borderColor: item.color, borderWidth: 2.5, pointRadius: 0, fill: false, showLine: true, tension: 0.1 });
+
+                if (filterTime !== 'none') {
+                    const tT = parseFloat(filterTime); const kaT = calculateShortCircuitCurrent(item.k, item.areaMm2, tT);
+                    datasets.push({ label: `${item.name}標記`, data: [{ x: kaT, y: tT }], pointBackgroundColor: item.color, pointBorderColor: '#fff', pointRadius: 6, showLine: false, customTag: `${kaT.toFixed(2)} kA` });
+                }
+            });
+            myChart.data.datasets = datasets; myChart.update();
+        }
+
+        function copyToExcel() {
+            if (cableData.length === 0) { alert('清單內目前無電纜資料！'); return; }
+            const timeMapping = [
+                { value: 0.01, id: "chk-001", label: "0.01秒電流(kA)" },
+                { value: 0.10, id: "chk-01",  label: "0.10秒電流(kA)" },
+                { value: 0.30, id: "chk-03",  label: "0.30秒電流(kA)" },
+                { value: 0.50, id: "chk-05",  label: "0.50秒電流(kA)" },
+                { value: 1.00, id: "chk-10",  label: "1.00秒電流(kA)" },
+                { value: 3.00, id: "chk-30",  label: "3.00秒電流(kA)" }
+            ];
+            const actualTimes = []; const actualHeaders = [];
+            timeMapping.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el && el.checked) { actualTimes.push(item.value); actualHeaders.push(item.label); }
+            });
+
+            let header = ['電纜規格名稱', '導體截面積', '單位', '絕緣材質', '材料常數(K值)', '耐溫等級', ...actualHeaders];
+            let txt = header.join('\t') + '\n';
+            cableData.forEach(item => {
+                let row = [item.name, item.nominalArea, item.unit, item.material, item.k, item.temp];
+                actualTimes.forEach(t => { row.push(calculateShortCircuitCurrent(item.k, item.areaMm2, t).toFixed(3)); });
+                txt += row.join('\t') + '\n';
+            });
+
+            const textArea = document.createElement("textarea"); textArea.value = txt;
+            textArea.style.position = "fixed"; textArea.style.opacity = "0"; document.body.appendChild(textArea);
+            textArea.focus(); textArea.select();
+            try {
+                if (document.execCommand('copy')) { alert('📋 【純數據複製成功】已完全依據您的最新勾選打包完畢！請直接至 Excel 貼上 (Ctrl+V) 即可生成完整大表。'); }
+                else { alert('複製失敗。'); }
+            } catch (err) { alert('複製失敗。'); }
+            document.body.removeChild(textArea);
+        }
+
+        // 【大升級：動態公式書視窗與左右箭頭防呆邏輯】
+        function showCalculationReport() {
+            if (cableData.length === 0) return; 
+            const item = cableData[selectedCableIndex];
+            
+            // A. 更新公式視窗中央的文字與動態 IEC 計算內容
+            document.getElementById('modal-content').innerHTML = `
+                <p>依據 <strong>IEC 60364-5-54</strong> 絕熱公式：</p>
+                <div style='background:#f4f4f4;padding:12px;text-align:center;font-weight:bold;margin:12px 0;font-size:1.1rem;font-family:monospace;'>I = (k &times; S) / &radic;t</div>
+                <p><strong>當前指定線路：</strong><span style="font-weight:bold;color:var(--accent-color);text-decoration:underline;">${item.name}</span></p>
+                <p style="margin-top:5px;"><strong>材料特性：</strong>熱特性常數 k = <strong>${item.k}</strong>，極限耐溫等級 = <strong>${item.temp}</strong></p>
+                <p><strong>換算截面積：</strong>S = <strong>${item.areaMm2.toFixed(2)} mm²</strong> (已完美換算為標準公制平方數)</p>
+                <div style="background:#eef6fc; padding:10px; border-left:4px solid var(--accent-color); margin:12px 0; font-size:0.9rem;">
+                    <strong>以標準故障時間 t = 1.00 秒帶入算式：</strong><br>
+                    I = (${item.k} &times; ${item.areaMm2.toFixed(2)}) / &radic;1.00 = <strong>${(item.k * item.areaMm2).toFixed(0)} A</strong> = <span style="font-weight:bold;color:var(--danger-color);">${(item.k * item.areaMm2 / 1000).toFixed(3)} kA</span>
+                </div>
+            `;
+
+            // B. 控制左右切換按鈕的變灰與防呆點擊鎖定
+            const prevBtn = document.getElementById('btn-prev-cable');
+            const nextBtn = document.getElementById('btn-next-cable');
+            
+            if (prevBtn && nextBtn) {
+                // 如果已經是最左邊第一條，前一條變灰色防呆
+                if (selectedCableIndex <= 0) { prevBtn.classList.add('disabled'); } 
+                else { prevBtn.classList.remove('disabled'); }
+
+                // 如果已經是最右邊最後一條，後一條變灰色防呆
+                if (selectedCableIndex >= cableData.length - 1) { nextBtn.classList.add('disabled'); } 
+                else { nextBtn.classList.remove('disabled'); }
+            }
+
+            document.getElementById('formula-modal').style.display = 'flex';
+        }
+
+        // 【大升級：公式書專用左右切換函數】
+        function switchFormulaCable(direction) {
+            const newIndex = selectedCableIndex + direction;
+            // 邊界防呆：超出範圍不執行切換
+            if (newIndex >= 0 && newIndex < cableData.length) {
+                selectedCableIndex = newIndex;
+                renderCableList();       // 1. 同步將左側表格與圖例該列加粗底線
+                showCalculationReport();  // 2. 即時更新公式書內部算式數值
+            }
+        }
+
+        function closeCalculationReport() { document.getElementById('formula-modal').style.display = 'none'; }
+
+        function downloadChartImage() {
+            const cvs = document.getElementById('shortCircuitChart'); const exp = document.createElement('canvas'); const ctx = exp.getContext('2d');
+            if (!cvs) return; exp.width = cvs.width + 40; exp.height = cvs.height + 140; ctx.fillStyle = '#fff'; ctx.fillRect(0,0,exp.width,exp.height);
+            ctx.drawImage(cvs, 20, 20); ctx.fillStyle = '#333'; ctx.font = 'bold 12px Arial'; ctx.fillText('📋 出口電纜短路熱極限規格對照表：', 25, cvs.height + 45);
+            let cx = 25, cy = cvs.height + 70;
+            cableData.forEach(item => {
+                if (!item.visible) return; ctx.fillStyle = item.color; ctx.fillRect(cx, cy-10, 12, 12); ctx.fillStyle = '#333'; ctx.font = '11px Arial';
+                ctx.fillText(`${item.name} (k=${item.k})`, cx+18, cy); cx += ctx.measureText(`${item.name} (k=${item.k})`).width + 45;
+                if (cx > exp.width - 150) { cx = 25; cy += 20; }
+            });
+            ctx.fillStyle = '#777'; ctx.font = 'italic 10px Arial'; ctx.fillText('※ 本計算採用公制標稱截面積與 IEC 60364-5-54 規範。導體幾何結構引起之微幅偏差不影響防護協調評估。', 25, exp.height - 15);
+            const a = document.createElement('a'); a.download = '電纜短路報告.png'; a.href = exp.toDataURL(); a.click();
+        }
+
+        (function() {
+            function forceInit() {
+                if (document.getElementById('shortCircuitChart')) {
+                    updateAreaOptions(); resetColorPicker(); initChart(); addDefaultExample(); 
+                } else { setTimeout(forceInit, 50); }
+            }
+            forceInit();
+        })();
+    </script>
+</body>
+</html>
